@@ -18,7 +18,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// SocketReadTimeout constant timeout values for incoming connections
 const SocketReadTimeout = 30
+
+// SocketReadTimeout constant timeout values for outgoing connections
 const SocketWriteTimeout = 30
 
 var config Config
