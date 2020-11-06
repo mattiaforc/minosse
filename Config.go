@@ -7,15 +7,15 @@ type Config struct {
 
 type Minosse struct {
 	Server string
-	Port int32
-	Log string
+	Port int
+	Log LogLevel
 	Connections Connections
 }
 
 type Connections struct {
 	ReadTimeout int
 	WriteTimeout int
-	MaxConnections int32
+	MaxConnections int
 }
 
 type Zap struct {

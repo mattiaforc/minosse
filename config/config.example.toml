@@ -1,0 +1,14 @@
+title = "Example minosse configuration"
+
+[minosse]
+server = "0.0.0.0"
+port = 8080
+log = 0
+
+  [minosse.connections]
+  readTimeout = 30
+  writeTimeout = 30
+  maxConnections = 100
+
+[zap]
+mode = "development"

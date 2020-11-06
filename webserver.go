@@ -14,29 +14,41 @@ import (
 	"time"
 
 	"github.com/pelletier/go-toml"
+	"go.uber.org/ratelimit"
+	"go.uber.org/zap"
 )
 
 const SocketReadTimeout = 30
 const SocketWriteTimeout = 30
 
 var config Config
+var logChannel LogChannel
 
 func main() {
 	printMinosse()
 	configure(&config)
+	configureLogger()
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.Port))
 	if err != nil {
 		log.Fatalf("Errore: %v", err)
 	}
-	fmt.Printf("Server listening on port %d\n", config.Minosse.Port)
+	logChannel.channel <- Log{
+		level:   Debug,
+		message: "Minosse server started",
+		data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port)},
+	}
 
 	newConnections := make(chan net.Conn)
 	go func(l net.Listener) {
 		for {
 			c, err := l.Accept()
 			if err != nil {
-				log.Printf("Error accepting new TCP connection: %s", err.Error())
+				logChannel.channel <- Log{
+					level:   Error,
+					message: "Error accepting new TCP connection",
+					data:    []zap.Field{zap.Error(err)},
+				}
 				newConnections <- nil
 				return
 			}
@@ -44,51 +56,77 @@ func main() {
 		}
 	}(listener)
 
+	var rl ratelimit.Limiter
+	if config.Minosse.Connections.MaxConnections > 0 {
+		rl = ratelimit.New(config.Minosse.Connections.MaxConnections)
+	} else {
+		rl = ratelimit.NewUnlimited()
+	}
+
 	for {
 		select {
 		case c := <-newConnections:
+			rl.Take()
 			go handleConnection(c)
 		}
 	}
 }
 
 func configure(conf *Config) {
-	confFile, err := ioutil.ReadFile("config.example.toml")
+	confFile, err := ioutil.ReadFile("./config/config.example.toml")
 	if err != nil {
-		log.Printf("Error reading minosse configuration file")
+		logChannel.channel <- Log{
+			level:   Error,
+			message: "Error reading minosse configuration file",
+			data:    []zap.Field{zap.Error(err)},
+		}
 	}
 
 	err = toml.Unmarshal(confFile, conf)
 	if err != nil {
-		log.Printf("Error in minosse configuration file. Error: %s", err.Error())
+		logChannel.channel <- Log{
+			level:   Error,
+			message: "Error in minosse configuration file",
+			data:    []zap.Field{zap.Error(err)},
+		}
 	}
 }
 
-func printMinosse() {
-	asciiArt :=
-		`
- __   __  ___   __    _  _______  _______  _______  _______ 
-|  |_|  ||   | |  |  | ||       ||       ||       ||       |
-|       ||   | |   |_| ||   _   ||  _____||  _____||    ___|
-|       ||   | |       ||  | |  || |_____ | |_____ |   |___ 
-|       ||   | |  _    ||  |_|  ||_____  ||_____  ||    ___|
-| ||_|| ||   | | | |   ||       | _____| | _____| ||   |___ 
-|_|   |_||___| |_|  |__||_______||_______||_______||_______|`
-	fmt.Println(asciiArt)
+func configureLogger() {
+	var logger *zap.Logger
+	switch config.Zap.Mode {
+	// TODO: Handle errors
+	case "development":
+		logger, _ = zap.NewDevelopment()
+		break
+	case "production":
+		logger, _ = zap.NewProduction()
+		break
+	default:
+		logger = zap.NewExample()
+	}
+	logChannel = newLogChannel(logger, &config)
+	go logChannel.handleLog()
 }
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	// TODO: Defer event sync
-	//defer logger.Sync()
 
 	// TODO: connection timeout from config
 	if err := conn.SetReadDeadline(time.Now().Add(time.Second * SocketReadTimeout)); err != nil {
-		log.Printf("Error setting read deadline: %s", err.Error())
+		logChannel.channel <- Log{
+			level:   Error,
+			message: "Error setting read deadline",
+			data:    []zap.Field{zap.Error(err)},
+		}
 		return
 	}
 	if err := conn.SetWriteDeadline(time.Now().Add(time.Second * SocketWriteTimeout)); err != nil {
-		log.Printf("Error setting write deadline: %s", err.Error())
+		logChannel.channel <- Log{
+			level:   Error,
+			message: "Error setting write deadline",
+			data:    []zap.Field{zap.Error(err)},
+		}
 		return
 	}
 
@@ -96,17 +134,21 @@ func handleConnection(conn net.Conn) {
 
 	req, err := http.ReadRequest(buf)
 	if err != nil {
-		log.Printf("Error reading request: %s", err.Error())
+		logChannel.channel <- Log{
+			level:   Error,
+			message: "Error reading request",
+			data:    []zap.Field{zap.Error(err)},
+		}
 		return
 	}
-	// log.Printf("Request: %v", req)
-	// TODO: Send log data to channel
-	// logger.Info("Request received", zap.String("URI", req.RequestURI), zap.String("Method", req.Method))
-	// log.Printf("Requested file: %s", req.RequestURI)
+	logChannel.channel <- Log{
+		level:   Debug,
+		message: "Request received",
+		data:    []zap.Field{zap.String("URI", req.RequestURI), zap.String("Method", req.Method)},
+	}
 
 	content, err := ioutil.ReadFile(filepath.Clean(req.RequestURI[1:]))
 	var response Response
-
 	if err != nil {
 		response = newResponseBuilder().StatusCode(404).Status("Not Found").Header("Transfer-Encoding", "identity").Header("Content-Type", "text/plain; charset=utf-8").Body([]byte("404 Not Found")).Build()
 	} else {
@@ -115,7 +157,11 @@ func handleConnection(conn net.Conn) {
 
 	_, err = conn.Write(response.toByte())
 	if err != nil {
-		log.Printf("Error writing response: %s", err.Error())
+		logChannel.channel <- Log{
+			level:   Error,
+			message: "Error writing response",
+			data:    []zap.Field{zap.Error(err)},
+		}
 		return
 	}
 }
