@@ -28,11 +28,11 @@ const (
 	Info LogLevel = 0
 	// Debug LogLevel 1
 	Debug LogLevel = 1
-	// Debug LogLevel 2
+	// Warning LogLevel 2
 	Warning LogLevel = 2
-	// Debug LogLevel 3
+	// Error LogLevel 3
 	Error LogLevel = 3
-	// Debug LogLevel 4
+	// Fatal LogLevel 4
 	Fatal LogLevel = 4
 )
 
