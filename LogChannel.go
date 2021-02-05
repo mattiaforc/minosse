@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -25,15 +26,15 @@ type LogLevel int8
 
 const (
 	// Info lowest LogLevel
-	Info LogLevel = 0
+	INFO LogLevel = 0
 	// Debug LogLevel 1
-	Debug LogLevel = 1
+	DEBUG LogLevel = 1
 	// Warning LogLevel 2
-	Warning LogLevel = 2
+	WARNING LogLevel = 2
 	// Error LogLevel 3
-	Error LogLevel = 3
+	ERROR LogLevel = 3
 	// Fatal LogLevel 4
-	Fatal LogLevel = 4
+	FATAL LogLevel = 4
 )
 
 func newLogChannel(logger *zap.Logger, config *Config) LogChannel {
@@ -52,25 +53,42 @@ func (logChannel LogChannel) handleLog() {
 
 		if log.level >= logChannel.level {
 			switch log.level {
-			case Info:
+			case INFO:
 				logChannel.logger.Info(log.message, log.data...)
 				break
-			case Debug:
+			case DEBUG:
 				logChannel.logger.Debug(log.message, log.data...)
 				break
-			case Warning:
+			case WARNING:
 				logChannel.logger.Warn(log.message, log.data...)
 				break
-			case Error:
+			case ERROR:
 				logChannel.logger.Error(log.message, log.data...)
 				break
-			case Fatal:
+			case FATAL:
 				logChannel.logger.Fatal(log.message, log.data...)
 				break
 			default:
-				logChannel.logger.Error(fmt.Sprintf("MINOSSE: lOG LEVEL %s UNDEFINED", log.level))
+				logChannel.logger.Error(fmt.Sprintf("MINOSSE: LOG LEVEL %d UNDEFINED", log.level))
 				break
 			}
 		}
+	}
+}
+
+func (logChannel *LogChannel) error(message string, err error) {
+	logChannel.channel <- Log{
+		level:   ERROR,
+		message: message,
+		data:    []zap.Field{zap.Error(err)},
+	}
+}
+
+func (LogChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string) {
+	end := time.Now()
+	logChannel.channel <- Log{
+		level:   INFO,
+		message: "Request received",
+		data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr)},
 	}
 }

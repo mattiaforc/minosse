@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -18,10 +19,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// SocketReadTimeout constant timeout values for incoming connections
+const OSX_OS = "darwin/amd64"
+const GENERIC_ERROR_MESSAGE_LOG string = "Error reading request"
+const TCP_CONNECTION_ERROR_MESSAGE_LOG string = "Error accepting new TCP connection"
 const SocketReadTimeout = 30
-
-// SocketWriteTimeout constant timeout values for outgoing connections
 const SocketWriteTimeout = 30
 
 var config Config
@@ -37,7 +38,7 @@ func main() {
 		log.Fatalf("Errore: %v", err)
 	}
 	logChannel.channel <- Log{
-		level:   Debug,
+		level:   DEBUG,
 		message: "Minosse server started",
 		data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port)},
 	}
@@ -47,11 +48,7 @@ func main() {
 		for {
 			c, err := l.Accept()
 			if err != nil {
-				logChannel.channel <- Log{
-					level:   Error,
-					message: "Error accepting new TCP connection",
-					data:    []zap.Field{zap.Error(err)},
-				}
+				logChannel.error(TCP_CONNECTION_ERROR_MESSAGE_LOG, err)
 				newConnections <- nil
 				return
 			}
@@ -76,22 +73,15 @@ func main() {
 }
 
 func configure(conf *Config) {
+	// TODO: read from cli --flags
 	confFile, err := ioutil.ReadFile("./config/config.example.toml")
 	if err != nil {
-		logChannel.channel <- Log{
-			level:   Error,
-			message: "Error reading minosse configuration file",
-			data:    []zap.Field{zap.Error(err)},
-		}
+		logChannel.error("Error reading minosse configuration file", err)
 	}
 
 	err = toml.Unmarshal(confFile, conf)
 	if err != nil {
-		logChannel.channel <- Log{
-			level:   Error,
-			message: "Error in minosse configuration file",
-			data:    []zap.Field{zap.Error(err)},
-		}
+		logChannel.error("Error in minosse configuration file", err)
 	}
 }
 
@@ -112,59 +102,55 @@ func configureLogger() {
 	go logChannel.handleLog()
 }
 
+func pippo(time time.Time) {
+	println(time.String())
+}
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
+	var requestUri string
+	var requestMethod string
+	var statusCode int
+	var remoteAddr string
+	defer logChannel.logRequest(time.Now(), &requestUri, &requestMethod, &statusCode, &remoteAddr)
 
-	// TODO: connection timeout from config
-	if err := conn.SetReadDeadline(time.Now().Add(time.Second * SocketReadTimeout)); err != nil {
-		logChannel.channel <- Log{
-			level:   Error,
-			message: "Error setting read deadline",
-			data:    []zap.Field{zap.Error(err)},
-		}
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(config.Minosse.Connections.ReadTimeout))); err != nil {
+		logChannel.error("Error setting read deadline", err)
 		return
 	}
-	if err := conn.SetWriteDeadline(time.Now().Add(time.Second * SocketWriteTimeout)); err != nil {
-		logChannel.channel <- Log{
-			level:   Error,
-			message: "Error setting write deadline",
-			data:    []zap.Field{zap.Error(err)},
-		}
+	if err := conn.SetWriteDeadline(time.Now().Add(time.Second * time.Duration(config.Minosse.Connections.WriteTimeout))); err != nil {
+		logChannel.error("Error setting write deadline", err)
 		return
 	}
 
 	buf := bufio.NewReader(conn)
-
 	req, err := http.ReadRequest(buf)
 	if err != nil {
-		logChannel.channel <- Log{
-			level:   Error,
-			message: "Error reading request",
-			data:    []zap.Field{zap.Error(err)},
-		}
+		logChannel.error("Error reading request", err)
 		return
 	}
-	logChannel.channel <- Log{
-		level:   Debug,
-		message: "Request received",
-		data:    []zap.Field{zap.String("URI", req.RequestURI), zap.String("Method", req.Method)},
-	}
 
-	content, err := ioutil.ReadFile(filepath.Clean(req.RequestURI[1:]))
+	requestUri = req.RequestURI[1:]
+	requestMethod = req.Method
+	remoteAddr = req.RemoteAddr
+
+	content, err := ioutil.ReadFile(filepath.Clean(requestUri))
 	var response Response
+
 	if err != nil {
-		response = newResponseBuilder().StatusCode(404).Status("Not Found").Header("Transfer-Encoding", "identity").Header("Content-Type", "text/plain; charset=utf-8").Body([]byte("404 Not Found")).Build()
+		response = responseNotFound()
+		statusCode = 404
 	} else {
-		response = newResponseBuilder().Status("OK").StatusCode(200).Header("Transfer-Encoding", "identity").Header("Content-Type", mime.TypeByExtension(req.RequestURI[strings.IndexRune(req.RequestURI, '.'):])).Header("Content-Length", strconv.Itoa(len(content))).Body(content).Build()
+		response = responseOk(content, map[string]string{"Content-Type": mime.TypeByExtension(req.RequestURI[strings.IndexRune(req.RequestURI, '.'):]), "Content-Length": strconv.Itoa(len(content)), "Cache-Control": "public, max-age=604800, immutable"})
+		if runtime.GOOS != OSX_OS && !strings.Contains(runtime.Version(), "1.15") {
+			response.Header("Content-Encoding", "identity")
+		}
+		statusCode = 200
 	}
 
 	_, err = conn.Write(response.toByte())
 	if err != nil {
-		logChannel.channel <- Log{
-			level:   Error,
-			message: "Error writing response",
-			data:    []zap.Field{zap.Error(err)},
-		}
+		logChannel.error("Error writing response", err)
 		return
 	}
 }

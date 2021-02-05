@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+const HTTP_NOT_FOUND string = "Not Found"
+const HTTP_OK string = "Ok"
+const HTTP_NOT_FOUND_BODY string = "404 Not Found"
+const SPACE string = " "
+const NEW_LINE string = "\n"
+
 // Response Response structure
 type Response struct {
 	status     string
@@ -15,22 +21,50 @@ type Response struct {
 	headers    map[string]string
 }
 
+func responseNotFound() Response {
+	return Response{
+		status:     HTTP_NOT_FOUND,
+		statusCode: 404,
+		body:       []byte(HTTP_NOT_FOUND_BODY),
+		protocol:   "HTTP/1.1",
+		headers:    map[string]string{"Content-Type": "text/plain; charset=utf-8"},
+	}
+}
+
+func responseOk(body []byte, headers map[string]string) Response {
+	return Response{
+		status:     HTTP_OK,
+		statusCode: 200,
+		body:       body,
+		protocol:   "HTTP/1.1",
+		headers:    headers,
+	}
+}
+
 // toByte Converts a Response to a byte array in order to send it back to the client via tcp.Connection.Write
 func (r *Response) toByte() (res []byte) {
 	var str strings.Builder
 
-	// TODO: nil checks...
-	str.WriteString(r.protocol)
-	str.WriteString(" ")
-	str.WriteString(strconv.Itoa(r.statusCode))
-	str.WriteString(" ")
-	str.WriteString(r.status)
-	str.WriteString("\n")
-	str.WriteString(hashmapMapToString(r.headers, func(header string, value string) string { return fmt.Sprintf("%s: %s\n", header, value) }))
-	str.WriteString("\n")
+	if "" != r.protocol {
+		str.WriteString(r.protocol)
+		str.WriteString(SPACE)
+	}
+	if 0 != r.statusCode {
+		str.WriteString(strconv.Itoa(r.statusCode))
+		str.WriteString(SPACE)
+	}
+	if "" != r.status {
+		str.WriteString(r.status)
+		str.WriteString(NEW_LINE)
+	}
+	if nil != r.headers {
+		str.WriteString(hashmapMapToString(r.headers, func(header string, value string) string { return fmt.Sprintf("%s: %s\n", header, value) }))
+		str.WriteString(NEW_LINE)
+	}
 	res = append(res, []byte(str.String())...)
-	res = append(res, r.body...)
-
+	if nil != r.body {
+		res = append(res, r.body...)
+	}
 	return
 }
 
@@ -41,6 +75,31 @@ type ResponseBuilder struct {
 	body       []byte
 	protocol   string
 	headers    map[string]string
+}
+
+func (r *Response) Body(body []byte) *Response {
+	r.body = body
+	return r
+}
+
+func (r *Response) Status(status string) *Response {
+	r.status = status
+	return r
+}
+
+func (r *Response) StatusCode(statusCode int) *Response {
+	r.statusCode = statusCode
+	return r
+}
+
+func (r *Response) Header(header, value string) *Response {
+	r.headers[header] = value
+	return r
+}
+
+func (r *Response) Headers(headers map[string]string) *Response {
+	r.headers = headers
+	return r
 }
 
 // newResponseBuilder Initializes a ResponseBuilder
