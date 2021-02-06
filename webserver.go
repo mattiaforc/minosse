@@ -102,10 +102,6 @@ func configureLogger() {
 	go logChannel.handleLog()
 }
 
-func pippo(time time.Time) {
-	println(time.String())
-}
-
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	var requestUri string
@@ -133,6 +129,11 @@ func handleConnection(conn net.Conn) {
 	requestUri = req.RequestURI[1:]
 	requestMethod = req.Method
 	remoteAddr = req.RemoteAddr
+
+	if requestMethod != HTTP_GET_METHOD {
+		response := responseMethodNotAllowed()
+		_, err = conn.Write(response.toByte())
+	}
 
 	content, err := ioutil.ReadFile(filepath.Clean(requestUri))
 	var response Response

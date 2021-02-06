@@ -6,9 +6,13 @@ import (
 	"strings"
 )
 
+const HTTP_POST_METHOD string = "POST"
+const HTTP_GET_METHOD string = "GET"
 const HTTP_NOT_FOUND string = "Not Found"
+const HTTP_NOT_ALLOWED string = "Method Not Allowed"
 const HTTP_OK string = "Ok"
 const HTTP_NOT_FOUND_BODY string = "404 Not Found"
+const HTTP_NOT_ALLOWED_BODY string = "405 Method Not Allowed"
 const SPACE string = " "
 const NEW_LINE string = "\n"
 
@@ -21,11 +25,21 @@ type Response struct {
 	headers    map[string]string
 }
 
+func responseMethodNotAllowed() Response {
+	return Response{
+		status:     HTTP_NOT_FOUND,
+		statusCode: 405,
+		protocol:   "HTTP/1.1",
+		body:       []byte(HTTP_NOT_FOUND_BODY),
+		headers:    map[string]string{"Content-Type": "text/plain; charset=utf-8"},
+	}
+}
+
 func responseNotFound() Response {
 	return Response{
 		status:     HTTP_NOT_FOUND,
 		statusCode: 404,
-		body:       []byte(HTTP_NOT_FOUND_BODY),
+		body:       []byte(HTTP_NOT_ALLOWED_BODY),
 		protocol:   "HTTP/1.1",
 		headers:    map[string]string{"Content-Type": "text/plain; charset=utf-8"},
 	}
