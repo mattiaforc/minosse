@@ -15,6 +15,17 @@ const HTTP_NOT_FOUND_BODY string = "404 Not Found"
 const HTTP_NOT_ALLOWED_BODY string = "405 Method Not Allowed"
 const SPACE string = " "
 const NEW_LINE string = "\n"
+const HTTP_1_1 string = "HTTP/1.1"
+const HEADER_CONTENT_TYPE string = "Content-Type"
+const HEADER_CONTENT_LENGTH string = "Content-Length"
+const HEADER_CACHE_CONTROL string = "Cache-Control"
+const HEADER_CACHE_CONTROL_DEFAULT_VALUE string = "public, max-age=604800"
+const HEADER_CONNECTION string = "Connection"
+const HEADER_CONNECTION_CLOSE string = "close"
+const HEADER_LAST_MODIFIED string = "Last-Modified"
+const HEADER_DATE string = "Date"
+const HEADER_SERVER string = "Server"
+const HEADER_SERVER_VALUE string = "Minosse"
 
 // Response Response structure
 type Response struct {
@@ -29,9 +40,9 @@ func responseMethodNotAllowed() Response {
 	return Response{
 		status:     HTTP_NOT_FOUND,
 		statusCode: 405,
-		protocol:   "HTTP/1.1",
+		protocol:   HTTP_1_1,
 		body:       []byte(HTTP_NOT_FOUND_BODY),
-		headers:    map[string]string{"Content-Type": "text/plain; charset=utf-8"},
+		headers:    map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"},
 	}
 }
 
@@ -40,8 +51,8 @@ func responseNotFound() Response {
 		status:     HTTP_NOT_FOUND,
 		statusCode: 404,
 		body:       []byte(HTTP_NOT_ALLOWED_BODY),
-		protocol:   "HTTP/1.1",
-		headers:    map[string]string{"Content-Type": "text/plain; charset=utf-8"},
+		protocol:   HTTP_1_1,
+		headers:    map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"},
 	}
 }
 
@@ -50,7 +61,7 @@ func responseOk(body []byte, headers map[string]string) Response {
 		status:     HTTP_OK,
 		statusCode: 200,
 		body:       body,
-		protocol:   "HTTP/1.1",
+		protocol:   HTTP_1_1,
 		headers:    headers,
 	}
 }

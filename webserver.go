@@ -4,14 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"mime"
 	"net"
 	"net/http"
+	"os"
+	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/pelletier/go-toml"
@@ -30,17 +29,26 @@ var logChannel LogChannel
 
 func main() {
 	printMinosse()
+	// TODO: Provide defaults
 	configure(&config)
 	configureLogger()
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.Port))
 	if err != nil {
-		log.Fatalf("Errore: %v", err)
+		if logChannel.level != DISABLED {
+			logChannel.channel <- Log{
+				level:   FATAL,
+				message: "Error when trying to listen at specified address:port",
+				data:    []zap.Field{zap.Error(err)},
+			}
+		}
 	}
-	logChannel.channel <- Log{
-		level:   DEBUG,
-		message: "Minosse server started",
-		data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port)},
+	if logChannel.level != DISABLED {
+		logChannel.channel <- Log{
+			level:   DEBUG,
+			message: "Minosse server started",
+			data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port)},
+		}
 	}
 
 	newConnections := make(chan net.Conn)
@@ -76,12 +84,12 @@ func configure(conf *Config) {
 	// TODO: read from cli --flags
 	confFile, err := ioutil.ReadFile("./config/config.example.toml")
 	if err != nil {
-		logChannel.error("Error reading minosse configuration file", err)
+		logChannel.error("WARNING: Could not read minosse configuration file", err)
 	}
 
 	err = toml.Unmarshal(confFile, conf)
 	if err != nil {
-		logChannel.error("Error in minosse configuration file", err)
+		logChannel.error("WARNING: Error in minosse configuration file", err)
 	}
 }
 
@@ -99,11 +107,15 @@ func configureLogger() {
 		logger = zap.NewExample()
 	}
 	logChannel = newLogChannel(logger, &config)
-	go logChannel.handleLog()
+
+	if logChannel.level != DISABLED {
+		go logChannel.handleLog()
+	}
 }
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
+
 	var requestUri string
 	var requestMethod string
 	var statusCode int
@@ -126,7 +138,7 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 
-	requestUri = req.RequestURI[1:]
+	requestUri = req.URL.String()
 	requestMethod = req.Method
 	remoteAddr = req.RemoteAddr
 
@@ -135,17 +147,20 @@ func handleConnection(conn net.Conn) {
 		_, err = conn.Write(response.toByte())
 	}
 
-	content, err := ioutil.ReadFile(filepath.Clean(requestUri))
+	var filepath = config.Minosse.WebRoot + filepath.Clean(requestUri)
+	content, err := ioutil.ReadFile(filepath)
 	var response Response
 
 	if err != nil {
 		response = responseNotFound()
 		statusCode = 404
 	} else {
-		response = responseOk(content, map[string]string{"Content-Type": mime.TypeByExtension(req.RequestURI[strings.IndexRune(req.RequestURI, '.'):]), "Content-Length": strconv.Itoa(len(content)), "Cache-Control": "public, max-age=604800, immutable"})
-		if runtime.GOOS != OSX_OS && !strings.Contains(runtime.Version(), "1.15") {
-			response.Header("Content-Encoding", "identity")
+		stat, err := os.Stat(filepath)
+		if err != nil {
+			logChannel.error("OS file stat error", err)
+			return
 		}
+		response = responseOk(content, map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(filepath)), HEADER_CONTENT_LENGTH: strconv.Itoa(len(content)), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
 		statusCode = 200
 	}
 

@@ -4,6 +4,7 @@ title = "Example minosse configuration"
 log = 0
 port = 8080
 server = "0.0.0.0"
+webroot = "/Users/malattia/Workspace/golang/minosse"
 
 [minosse.connections]
 maxConnections = 500

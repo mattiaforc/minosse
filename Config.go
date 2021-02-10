@@ -10,6 +10,7 @@ type Config struct {
 type Minosse struct {
 	Server      string
 	Port        int
+	WebRoot     string
 	Log         LogLevel
 	Connections Connections
 }

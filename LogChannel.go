@@ -25,6 +25,7 @@ type Log struct {
 type LogLevel int8
 
 const (
+	DISABLED LogLevel = -1
 	// Info lowest LogLevel
 	INFO LogLevel = 0
 	// Debug LogLevel 1
@@ -77,18 +78,24 @@ func (logChannel LogChannel) handleLog() {
 }
 
 func (logChannel *LogChannel) error(message string, err error) {
-	logChannel.channel <- Log{
-		level:   ERROR,
-		message: message,
-		data:    []zap.Field{zap.Error(err)},
+	if logChannel.level != DISABLED {
+		logChannel.channel <- Log{
+			level:   ERROR,
+			message: message,
+			data:    []zap.Field{zap.Error(err)},
+		}
 	}
+	return
 }
 
 func (LogChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string) {
-	end := time.Now()
-	logChannel.channel <- Log{
-		level:   INFO,
-		message: "Request received",
-		data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr)},
+	if logChannel.level != DISABLED {
+		end := time.Now()
+		logChannel.channel <- Log{
+			level:   INFO,
+			message: "Request received",
+			data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr)},
+		}
 	}
+	return
 }
