@@ -82,11 +82,11 @@ vus........................: 56     min=56  max=100
 vus_max....................: 100    min=100 max=100
 
 ++++++++++
-
+Refactor 5 feb
 ++++++++++
 
- ✗ Response code 200
-      ↳  99% — ✓ 44674 / ✗ 186
+✗ Response code 200
+↳  99% — ✓ 44674 / ✗ 186
 
 checks.....................: 99.58% ✓ 44674 ✗ 186  
 data_received..............: 13 MB  177 kB/s
@@ -103,3 +103,24 @@ iteration_duration.........: avg=167.07ms min=883.62µs med=33.71ms max=30.03s  
 iterations.................: 44860  589.242121/s
 vus........................: 1      min=1   max=100
 vus_max....................: 100    min=100 max=100
+
+----------------------
+minosse dockered 5 feb
+----------------------
+✓ Response code 200
+
+checks.....................: 100.00% ✓ 25284 ✗ 0    
+data_received..............: 6.4 MB  106 kB/s
+data_sent..................: 3.0 MB  50 kB/s
+http_req_blocked...........: avg=56.69ms  min=591.33µs med=20.32ms  max=4.18s   p(90)=91.58ms  p(95)=134.26ms
+http_req_connecting........: avg=49.68ms  min=0s       med=12.44ms  max=4.18s   p(90)=78.25ms  p(95)=110.04ms
+http_req_duration..........: avg=181.35ms min=3.83ms   med=182.45ms max=4.26s   p(90)=217.67ms p(95)=294.25ms
+http_req_receiving.........: avg=9.74ms   min=11.13µs  med=2.61ms   max=232.9ms p(90)=29.5ms   p(95)=42.26ms 
+http_req_sending...........: avg=14.34ms  min=15.13µs  med=4.2ms    max=4.17s   p(90)=36.56ms  p(95)=54.85ms 
+http_req_tls_handshaking...: avg=0s       min=0s       med=0s       max=0s      p(90)=0s       p(95)=0s      
+http_req_waiting...........: avg=157.26ms min=3.64ms   med=159.7ms  max=1.21s   p(90)=200.11ms p(95)=236.51ms
+http_reqs..................: 25284   420.254474/s
+iteration_duration.........: avg=237.32ms min=5.58ms   med=199.4ms  max=4.36s   p(90)=283.69ms p(95)=523.85ms
+iterations.................: 25284   420.254474/s
+vus........................: 83      min=83  max=100
+vus_max....................: 100     min=100 max=100

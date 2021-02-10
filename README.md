@@ -48,6 +48,8 @@ mode = "development"
 
 # TODOs
 
-- Add authenticated resources (something like .htaccess)
+- Support HTTPS
+- Add authenticated resources (something like nginx.conf)
 - Add a CLI interface
+- Generating custom configuration from CLI command
 - Create a complete `Dockerfile` 
