@@ -6,27 +6,6 @@ import (
 	"strings"
 )
 
-const HTTP_POST_METHOD string = "POST"
-const HTTP_GET_METHOD string = "GET"
-const HTTP_NOT_FOUND string = "Not Found"
-const HTTP_NOT_ALLOWED string = "Method Not Allowed"
-const HTTP_OK string = "Ok"
-const HTTP_NOT_FOUND_BODY string = "404 Not Found"
-const HTTP_NOT_ALLOWED_BODY string = "405 Method Not Allowed"
-const SPACE string = " "
-const NEW_LINE string = "\n"
-const HTTP_1_1 string = "HTTP/1.1"
-const HEADER_CONTENT_TYPE string = "Content-Type"
-const HEADER_CONTENT_LENGTH string = "Content-Length"
-const HEADER_CACHE_CONTROL string = "Cache-Control"
-const HEADER_CACHE_CONTROL_DEFAULT_VALUE string = "public, max-age=604800"
-const HEADER_CONNECTION string = "Connection"
-const HEADER_CONNECTION_CLOSE string = "close"
-const HEADER_LAST_MODIFIED string = "Last-Modified"
-const HEADER_DATE string = "Date"
-const HEADER_SERVER string = "Server"
-const HEADER_SERVER_VALUE string = "Minosse"
-
 // Response Response structure
 type Response struct {
 	status     string
@@ -56,6 +35,15 @@ func responseNotFound() Response {
 	}
 }
 
+func responseOkNoBody(headers map[string]string) Response {
+	return Response{
+		status:     HTTP_OK,
+		statusCode: 200,
+		protocol:   HTTP_1_1,
+		headers:    headers,
+	}
+}
+
 func responseOk(body []byte, headers map[string]string) Response {
 	return Response{
 		status:     HTTP_OK,
@@ -66,8 +54,7 @@ func responseOk(body []byte, headers map[string]string) Response {
 	}
 }
 
-// toByte Converts a Response to a byte array in order to send it back to the client via tcp.Connection.Write
-func (r *Response) toByte() (res []byte) {
+func (r *Response) responseToByteNoBody() (res []byte) {
 	var str strings.Builder
 
 	if "" != r.protocol {
@@ -87,6 +74,12 @@ func (r *Response) toByte() (res []byte) {
 		str.WriteString(NEW_LINE)
 	}
 	res = append(res, []byte(str.String())...)
+	return
+}
+
+// toByte Converts a Response to a byte array in order to send it back to the client via tcp.Connection.Write
+func (r *Response) toByte() (res []byte) {
+	res = append(res, r.responseToByteNoBody()...)
 	if nil != r.body {
 		res = append(res, r.body...)
 	}

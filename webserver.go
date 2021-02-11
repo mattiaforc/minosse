@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"mime"
 	"net"
@@ -18,9 +19,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const OSX_OS = "darwin/amd64"
-const GENERIC_ERROR_MESSAGE_LOG string = "Error reading request"
-const TCP_CONNECTION_ERROR_MESSAGE_LOG string = "Error accepting new TCP connection"
 const SocketReadTimeout = 30
 const SocketWriteTimeout = 30
 
@@ -148,23 +146,37 @@ func handleConnection(conn net.Conn) {
 	}
 
 	var filepath = config.Minosse.WebRoot + filepath.Clean(requestUri)
-	content, err := ioutil.ReadFile(filepath)
 	var response Response
 
+	stat, err := os.Stat(filepath)
 	if err != nil {
 		response = responseNotFound()
 		statusCode = 404
-	} else {
-		stat, err := os.Stat(filepath)
+		_, err = conn.Write(response.toByte())
 		if err != nil {
-			logChannel.error("OS file stat error", err)
-			return
+			logChannel.error("Error writing response", err)
 		}
-		response = responseOk(content, map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(filepath)), HEADER_CONTENT_LENGTH: strconv.Itoa(len(content)), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
+		return
+	} else {
+		response = responseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(filepath)), HEADER_CONTENT_LENGTH: strconv.FormatInt(stat.Size(), 10), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
 		statusCode = 200
 	}
 
-	_, err = conn.Write(response.toByte())
+	_, err = conn.Write(response.responseToByteNoBody())
+	if err != nil {
+		logChannel.error("Error writing response", err)
+		return
+	}
+
+	f, err := os.Open(filepath)
+	defer f.Close()
+
+	if err != nil {
+		logChannel.error("Error opening file", err)
+		return
+	}
+
+	_, err = io.Copy(conn.(*net.TCPConn), f)
 	if err != nil {
 		logChannel.error("Error writing response", err)
 		return
