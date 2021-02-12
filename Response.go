@@ -25,6 +25,16 @@ func responseMethodNotAllowed() Response {
 	}
 }
 
+func responseInternalServerError() Response {
+	return Response{
+		status:     HTTP_INTERNAL_SERVER_ERROR,
+		statusCode: 500,
+		body:       []byte(HTTP_INTERNAL_SERVER_ERROR),
+		protocol:   HTTP_1_1,
+		headers:    map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"},
+	}
+}
+
 func responseNotFound() Response {
 	return Response{
 		status:     HTTP_NOT_FOUND,

@@ -148,10 +148,22 @@ func handleConnection(conn net.Conn) {
 	var filepath = config.Minosse.WebRoot + filepath.Clean(requestUri)
 	var response Response
 
-	stat, err := os.Stat(filepath)
+	f, err := os.Open(filepath)
 	if err != nil {
+		logChannel.error("File not found", err)
 		response = responseNotFound()
-		statusCode = 404
+		statusCode = response.statusCode
+		_, err = conn.Write(response.toByte())
+		if err != nil {
+			logChannel.error("Error writing response", err)
+		}
+		return
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		logChannel.error("Error during file stat", err)
+		response = responseInternalServerError()
+		statusCode = response.statusCode
 		_, err = conn.Write(response.toByte())
 		if err != nil {
 			logChannel.error("Error writing response", err)
@@ -159,7 +171,7 @@ func handleConnection(conn net.Conn) {
 		return
 	} else {
 		response = responseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(filepath)), HEADER_CONTENT_LENGTH: strconv.FormatInt(stat.Size(), 10), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
-		statusCode = 200
+		statusCode = response.statusCode
 	}
 
 	_, err = conn.Write(response.responseToByteNoBody())
@@ -167,9 +179,6 @@ func handleConnection(conn net.Conn) {
 		logChannel.error("Error writing response", err)
 		return
 	}
-
-	f, err := os.Open(filepath)
-	defer f.Close()
 
 	if err != nil {
 		logChannel.error("Error opening file", err)
