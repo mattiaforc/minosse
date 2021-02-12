@@ -176,7 +176,8 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 
-	_, err = io.Copy(conn.(*net.TCPConn), f)
+	conn = conn.(*net.TCPConn)
+	_, err = io.Copy(conn, f)
 	if err != nil {
 		logChannel.error("Error writing response", err)
 		return

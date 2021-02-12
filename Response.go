@@ -29,7 +29,7 @@ func responseNotFound() Response {
 	return Response{
 		status:     HTTP_NOT_FOUND,
 		statusCode: 404,
-		body:       []byte(HTTP_NOT_ALLOWED_BODY),
+		body:       []byte(HTTP_NOT_FOUND_BODY),
 		protocol:   HTTP_1_1,
 		headers:    map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"},
 	}
