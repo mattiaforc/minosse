@@ -20,10 +20,11 @@ A simple, fast, easily configurable, pocket-sized static file server written in 
 # Configuration
 
 ```toml
-title = "Example minosse configuration"
+title = "EXAMPLE MINOSSE CONFIGURATION"
 
 [minosse]
 # Log level
+# -1 = DISABLED 
 # 0 = INFO
 # 1 = DEBUG
 # 2 = WARNING
@@ -32,6 +33,7 @@ title = "Example minosse configuration"
 log = 0
 port = 8080
 server = "0.0.0.0"
+webroot = "public" # This could be a relative path or an absolute one
 
 [minosse.connections]
 # Leaky bucket rate limiting.
@@ -44,12 +46,44 @@ writeTimeout = 30
 # Zap logger mode. Refer to https://github.com/uber-go/zap
 mode = "development"
 
+[minosse.tls]
+X509RootCAPath = "private/rootCA.key"
+X509CertPath = "private/server.crt"
+X509KeyPath = "private/server.key"
+enabled = true
+port = 443
+
+```
+
+## TLS configuration
+
+Optional: Add a root CA (Certificate Authority) or create one:
+```sh
+openssl genrsa -des3 -out rootCA.key 2048
+```
+and use that private key to generate the root CA certificate:
+```sh
+openssl req -x509 -new -nodes -key rootCA.key -sha256 -days 1825 -out rootCA.pem
+```
+
+Create the private key for minosse:
+```sh
+openssl genrsa -out client.key 2048
+```
+Create the certificate for minosse:
+```sh
+openssl req -new -key client.key -out client.csr
+```
+
+Optional as above: Sign the certificate with the root CA private key:
+```sh
+openssl x509 -req -in client.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out client.crt -days 825 -sha256
 ```
 
 # TODOs
 
-- Support HTTPS
-- Add authenticated resources (something like nginx.conf)
+- ~~Support HTTPS~~
 - Add a CLI interface
+- Add authenticated resources (something like nginx.conf)
 - Generating custom configuration from CLI command
 - Create a complete `Dockerfile` 

@@ -13,6 +13,7 @@ type Minosse struct {
 	WebRoot     string
 	Log         LogLevel
 	Connections Connections
+	TLS         TLS
 }
 
 // Connections Configurations regarding connections
@@ -25,4 +26,12 @@ type Connections struct {
 // Zap Configuration for zap logger
 type Zap struct {
 	Mode string
+}
+
+type TLS struct {
+	Enabled        bool
+	Port           int
+	X509CertPath   string
+	X509KeyPath    string
+	X509RootCAPath string
 }

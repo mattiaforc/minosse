@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,36 +33,60 @@ func main() {
 	configure(&config)
 	configureLogger()
 
+	newConnections := make(chan net.Conn)
+
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.Port))
 	if err != nil {
-		if logChannel.level != DISABLED {
-			logChannel.channel <- Log{
-				level:   FATAL,
-				message: "Error when trying to listen at specified address:port",
-				data:    []zap.Field{zap.Error(err)},
-			}
-		}
+		logChannel.fatalError("Error when trying to listen at specified address:port", err)
+		return
 	}
 	if logChannel.level != DISABLED {
 		logChannel.channel <- Log{
 			level:   DEBUG,
 			message: "Minosse server started",
-			data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port)},
+			data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port), zap.String("root", config.Minosse.WebRoot)},
 		}
 	}
+	go listen(listener, newConnections)
 
-	newConnections := make(chan net.Conn)
-	go func(l net.Listener) {
-		for {
-			c, err := l.Accept()
+	if config.Minosse.TLS.Enabled {
+		cert, err := tls.LoadX509KeyPair(config.Minosse.TLS.X509CertPath, config.Minosse.TLS.X509KeyPath)
+		if err != nil {
+			logChannel.fatalError("Fatal error while loading x509 keypair", err)
+			return
+		}
+		var rootCAPool *x509.CertPool
+		if config.Minosse.TLS.X509RootCAPath != "" {
+			rootCAPool = x509.NewCertPool()
+			rootCA, err := ioutil.ReadFile(config.Minosse.TLS.X509RootCAPath)
 			if err != nil {
-				logChannel.error(TCP_CONNECTION_ERROR_MESSAGE_LOG, err)
-				newConnections <- nil
+				logChannel.error("Could not read root CA file", err)
 				return
 			}
-			newConnections <- c
+			ok := rootCAPool.AppendCertsFromPEM(rootCA)
+			if !ok {
+				logChannel.error("Unable to use supplied root CA cert. Make sure it is a valid certificate", nil)
+				return
+			}
 		}
-	}(listener)
+
+		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: rootCAPool}
+
+		tlsListener, err := tls.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.TLS.Port), tlsConfig)
+		if err != nil {
+			logChannel.fatalError("Error when trying to listen at specified address:port", err)
+			return
+		}
+		if logChannel.level != DISABLED {
+			logChannel.channel <- Log{
+				level:   DEBUG,
+				message: "Serving with TLS enabled on: ",
+				data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", 443)},
+			}
+		}
+
+		go listen(tlsListener, newConnections)
+	}
 
 	var rl ratelimit.Limiter
 	if config.Minosse.Connections.MaxConnections > 0 {
@@ -111,6 +137,18 @@ func configureLogger() {
 	}
 }
 
+func listen(l net.Listener, newConnections chan (net.Conn)) {
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			logChannel.error(CONNECTION_ERROR_MESSAGE_LOG, err)
+			newConnections <- nil
+			return
+		}
+		newConnections <- c
+	}
+}
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
@@ -118,7 +156,16 @@ func handleConnection(conn net.Conn) {
 	var requestMethod string
 	var statusCode int
 	var remoteAddr string
-	defer logChannel.logRequest(time.Now(), &requestUri, &requestMethod, &statusCode, &remoteAddr)
+	var transportProtocol string
+	defer logChannel.logRequest(time.Now(), &requestUri, &requestMethod, &statusCode, &remoteAddr, &transportProtocol)
+
+	switch conn.(type) {
+	case *net.TCPConn:
+		conn = conn.(*net.TCPConn)
+		transportProtocol = TCP_PROTOCOL
+	case *tls.Conn:
+		transportProtocol = TLS_PROTOCOL
+	}
 
 	if err := conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(config.Minosse.Connections.ReadTimeout))); err != nil {
 		logChannel.error("Error setting read deadline", err)
@@ -143,6 +190,7 @@ func handleConnection(conn net.Conn) {
 	if requestMethod != HTTP_GET_METHOD {
 		response := responseMethodNotAllowed()
 		_, err = conn.Write(response.toByte())
+		return
 	}
 
 	var filepath = config.Minosse.WebRoot + filepath.Clean(requestUri)
@@ -185,7 +233,6 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 
-	conn = conn.(*net.TCPConn)
 	_, err = io.Copy(conn, f)
 	if err != nil {
 		logChannel.error("Error writing response", err)

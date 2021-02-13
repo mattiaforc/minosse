@@ -77,6 +77,17 @@ func (logChannel LogChannel) handleLog() {
 	}
 }
 
+func (logChannel *LogChannel) fatalError(message string, err error) {
+	if logChannel.level != DISABLED {
+		logChannel.channel <- Log{
+			level:   FATAL,
+			message: message,
+			data:    []zap.Field{zap.Error(err)},
+		}
+	}
+	return
+}
+
 func (logChannel *LogChannel) error(message string, err error) {
 	if logChannel.level != DISABLED {
 		logChannel.channel <- Log{
@@ -88,13 +99,13 @@ func (logChannel *LogChannel) error(message string, err error) {
 	return
 }
 
-func (LogChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string) {
+func (LogChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string, transportProtocol *string) {
 	if logChannel.level != DISABLED {
 		end := time.Now()
 		logChannel.channel <- Log{
 			level:   INFO,
 			message: "Request received",
-			data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr)},
+			data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr), zap.String("Transport protocol", *transportProtocol)},
 		}
 	}
 	return

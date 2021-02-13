@@ -4,12 +4,19 @@ title = "Example minosse configuration"
 log = 0
 port = 8080
 server = "0.0.0.0"
-webroot = "/Users/malattia/Workspace/golang/minosse"
+webroot = "public"
 
 [minosse.connections]
 maxConnections = 500
 readTimeout = 30
 writeTimeout = 30
+
+[minosse.tls]
+X509CertPath = "private/client.crt"
+X509KeyPath = "private/client.key"
+X509RootCAPath = "private/rootCA.pem"
+enabled = false
+port = 443
 
 [zap]
 mode = "development"
