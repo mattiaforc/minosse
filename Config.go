@@ -1,8 +1,11 @@
 package main
 
+import "time"
+
 // Config Central configuration structure (minosse, zap logger, etc...)
 type Config struct {
 	Minosse Minosse
+	Ants    Ants
 	Zap     Zap
 }
 
@@ -21,6 +24,16 @@ type Connections struct {
 	ReadTimeout    int
 	WriteTimeout   int
 	MaxConnections int
+}
+
+// Ants Configurations regarding Ants coroutine pool
+type Ants struct {
+	Enabled          bool
+	PoolSize         int
+	ExpiryDuration   time.Duration
+	PreAlloc         bool
+	MaxBlockingTasks int
+	Nonblocking      bool
 }
 
 // Zap Configuration for zap logger

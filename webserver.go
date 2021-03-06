@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/panjf2000/ants/v2"
 	"github.com/pelletier/go-toml"
 	"go.uber.org/ratelimit"
 	"go.uber.org/zap"
@@ -28,6 +29,8 @@ var config Config
 var logChannel LogChannel
 
 func main() {
+	defer ants.Release()
+
 	printMinosse()
 	// TODO: Provide defaults
 	configure(&config)
@@ -95,11 +98,40 @@ func main() {
 		rl = ratelimit.NewUnlimited()
 	}
 
-	for {
-		select {
-		case c := <-newConnections:
-			rl.Take()
-			go handleConnection(c)
+	var pool *ants.PoolWithFunc
+
+	if config.Ants.Enabled {
+		pool, err = ants.NewPoolWithFunc(config.Ants.PoolSize, func(c interface{}) {
+			handleConnection(c.(net.Conn))
+		}, func(opts *ants.Options) {
+			options := ants.Options{
+				ExpiryDuration:   config.Ants.ExpiryDuration,
+				PreAlloc:         config.Ants.PreAlloc,
+				MaxBlockingTasks: config.Ants.MaxBlockingTasks,
+				Nonblocking:      config.Ants.Nonblocking,
+			}
+			*opts = options
+		})
+	}
+
+	if config.Ants.Enabled {
+		for {
+			select {
+			case c := <-newConnections:
+				rl.Take()
+				err = pool.Invoke(c)
+				if err != nil {
+					logChannel.error("Pool error", err)
+				}
+			}
+		}
+	} else {
+		for {
+			select {
+			case c := <-newConnections:
+				rl.Take()
+				go handleConnection(c)
+			}
 		}
 	}
 }
@@ -137,7 +169,7 @@ func configureLogger() {
 	}
 }
 
-func listen(l net.Listener, newConnections chan (net.Conn)) {
+func listen(l net.Listener, newConnections chan net.Conn) {
 	for {
 		c, err := l.Accept()
 		if err != nil {
@@ -193,10 +225,10 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 
-	var filepath = config.Minosse.WebRoot + filepath.Clean(requestUri)
+	var pathFile = config.Minosse.WebRoot + filepath.Clean(requestUri)
 	var response Response
 
-	f, err := os.Open(filepath)
+	f, err := os.Open(pathFile)
 	if err != nil {
 		logChannel.error("File not found", err)
 		response = responseNotFound()
@@ -218,18 +250,13 @@ func handleConnection(conn net.Conn) {
 		}
 		return
 	} else {
-		response = responseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(filepath)), HEADER_CONTENT_LENGTH: strconv.FormatInt(stat.Size(), 10), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
+		response = responseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(pathFile)), HEADER_CONTENT_LENGTH: strconv.FormatInt(stat.Size(), 10), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
 		statusCode = response.statusCode
 	}
 
 	_, err = conn.Write(response.responseToByteNoBody())
 	if err != nil {
 		logChannel.error("Error writing response", err)
-		return
-	}
-
-	if err != nil {
-		logChannel.error("Error opening file", err)
 		return
 	}
 

@@ -7,7 +7,7 @@ server = "0.0.0.0"
 webroot = "public"
 
 [minosse.connections]
-maxConnections = 500
+# maxConnections = 500
 readTimeout = 30
 writeTimeout = 30
 
@@ -17,6 +17,14 @@ X509KeyPath = "private/client.key"
 X509RootCAPath = "private/rootCA.pem"
 enabled = false
 port = 443
+
+[ants]
+enabled = false
+poolSize = 100
+expiryDuration = 30
+preAlloc = true
+maxBlockingTasks = 10
+nonBlocking = false
 
 [zap]
 mode = "development"
