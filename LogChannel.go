@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -106,6 +109,42 @@ func (LogChannel *LogChannel) logRequest(start time.Time, requestUri, requestMet
 			level:   INFO,
 			message: "Request received",
 			data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr), zap.String("Transport protocol", *transportProtocol)},
+		}
+	}
+	return
+}
+
+func (LogChannel *LogChannel) logWholeRequest(request *http.Request, response *Response) {
+	if logChannel.level != DISABLED {
+		var sb strings.Builder
+		var body []byte
+
+		_, err := request.Body.Read(body)
+		if err != nil && err != io.EOF {
+			logChannel.error("Error while reading request body", err)
+		}
+
+		for key, val := range request.Header {
+			sb.WriteString(key)
+			sb.WriteString(": ")
+			for _, headerVal := range val {
+				sb.WriteString(headerVal)
+			}
+			sb.WriteString(", ")
+		}
+
+		logChannel.channel <- Log{
+			level:   INFO,
+			message: ">>>>",
+			data: []zap.Field{
+				zap.Int("response_code", response.statusCode),
+				zap.String("response_status", response.status),
+				zap.String("request_method", request.Method),
+				zap.String("request_uri", request.URL.String()),
+				zap.String("request_headers", sb.String()),
+				zap.String("request_body", string(body)),
+				zap.String("request_remote_address", request.RemoteAddr),
+			},
 		}
 	}
 	return

@@ -184,21 +184,6 @@ func listen(l net.Listener, newConnections chan net.Conn) {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	var requestUri string
-	var requestMethod string
-	var statusCode int
-	var remoteAddr string
-	var transportProtocol string
-	defer logChannel.logRequest(time.Now(), &requestUri, &requestMethod, &statusCode, &remoteAddr, &transportProtocol)
-
-	switch conn.(type) {
-	case *net.TCPConn:
-		conn = conn.(*net.TCPConn)
-		transportProtocol = TCP_PROTOCOL
-	case *tls.Conn:
-		transportProtocol = TLS_PROTOCOL
-	}
-
 	if err := conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(config.Minosse.Connections.ReadTimeout))); err != nil {
 		logChannel.error("Error setting read deadline", err)
 		return
@@ -208,31 +193,29 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 
-	buf := bufio.NewReader(conn)
-	req, err := http.ReadRequest(buf)
+	var req *http.Request
+	var response Response
+
+	req, err := http.ReadRequest(bufio.NewReader(conn))
+	defer logChannel.logWholeRequest(req, &response)
+
 	if err != nil {
 		logChannel.error("Error reading request", err)
 		return
 	}
 
-	requestUri = req.URL.String()
-	requestMethod = req.Method
-	remoteAddr = req.RemoteAddr
-
-	if requestMethod != HTTP_GET_METHOD {
+	if req.Method != HTTP_GET_METHOD {
 		response := responseMethodNotAllowed()
 		_, err = conn.Write(response.toByte())
 		return
 	}
 
-	var pathFile = config.Minosse.WebRoot + filepath.Clean(requestUri)
-	var response Response
+	var pathFile = config.Minosse.WebRoot + filepath.Clean(req.URL.String())
 
 	f, err := os.Open(pathFile)
 	if err != nil {
 		logChannel.error("File not found", err)
 		response = responseNotFound()
-		statusCode = response.statusCode
 		_, err = conn.Write(response.toByte())
 		if err != nil {
 			logChannel.error("Error writing response", err)
@@ -243,7 +226,6 @@ func handleConnection(conn net.Conn) {
 	if err != nil {
 		logChannel.error("Error during file stat", err)
 		response = responseInternalServerError()
-		statusCode = response.statusCode
 		_, err = conn.Write(response.toByte())
 		if err != nil {
 			logChannel.error("Error writing response", err)
@@ -251,11 +233,10 @@ func handleConnection(conn net.Conn) {
 		return
 	} else {
 		response = responseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(pathFile)), HEADER_CONTENT_LENGTH: strconv.FormatInt(stat.Size(), 10), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
-		statusCode = response.statusCode
 	}
 
 	_, err = conn.Write(response.responseToByteNoBody())
-	if err != nil {
+	if err != nil && err != io.EOF {
 		logChannel.error("Error writing response", err)
 		return
 	}

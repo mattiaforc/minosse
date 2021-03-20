@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -12,7 +11,7 @@ type Response struct {
 	statusCode int
 	body       []byte
 	protocol   string
-	headers    map[string]string
+	headers    string
 }
 
 func responseMethodNotAllowed() Response {
@@ -21,7 +20,7 @@ func responseMethodNotAllowed() Response {
 		statusCode: 405,
 		protocol:   HTTP_1_1,
 		body:       []byte(HTTP_NOT_FOUND_BODY),
-		headers:    map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"},
+		headers:    hashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, headerMapToString),
 	}
 }
 
@@ -31,7 +30,7 @@ func responseInternalServerError() Response {
 		statusCode: 500,
 		body:       []byte(HTTP_INTERNAL_SERVER_ERROR),
 		protocol:   HTTP_1_1,
-		headers:    map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"},
+		headers:    hashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, headerMapToString),
 	}
 }
 
@@ -41,7 +40,7 @@ func responseNotFound() Response {
 		statusCode: 404,
 		body:       []byte(HTTP_NOT_FOUND_BODY),
 		protocol:   HTTP_1_1,
-		headers:    map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"},
+		headers:    hashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, headerMapToString),
 	}
 }
 
@@ -50,7 +49,7 @@ func responseOkNoBody(headers map[string]string) Response {
 		status:     HTTP_OK,
 		statusCode: 200,
 		protocol:   HTTP_1_1,
-		headers:    headers,
+		headers:    hashmapMapToString(headers, headerMapToString),
 	}
 }
 
@@ -60,8 +59,19 @@ func responseOk(body []byte, headers map[string]string) Response {
 		statusCode: 200,
 		body:       body,
 		protocol:   HTTP_1_1,
-		headers:    headers,
+		headers:    hashmapMapToString(headers, headerMapToString),
 	}
+}
+
+func headerMapToString(header string, value string) string {
+	var sb strings.Builder
+
+	sb.WriteString(header)
+	sb.WriteString(": ")
+	sb.WriteString(value)
+	sb.WriteString(EOL)
+
+	return sb.String()
 }
 
 func (r *Response) responseToByteNoBody() (res []byte) {
@@ -77,11 +87,11 @@ func (r *Response) responseToByteNoBody() (res []byte) {
 	}
 	if "" != r.status {
 		str.WriteString(r.status)
-		str.WriteString(NEW_LINE)
+		str.WriteString(EOL)
 	}
-	if nil != r.headers {
-		str.WriteString(hashmapMapToString(r.headers, func(header string, value string) string { return fmt.Sprintf("%s: %s\n", header, value) }))
-		str.WriteString(NEW_LINE)
+	if "" != r.headers {
+		str.WriteString(r.headers)
+		str.WriteString(EOL)
 	}
 	res = append(res, []byte(str.String())...)
 	return
@@ -120,13 +130,15 @@ func (r *Response) StatusCode(statusCode int) *Response {
 	return r
 }
 
+/*
 func (r *Response) Header(header, value string) *Response {
-	r.headers[header] = value
-	return r
+		r.headers[header] = value
+		return r
 }
+*/
 
 func (r *Response) Headers(headers map[string]string) *Response {
-	r.headers = headers
+	r.headers = hashmapMapToString(headers, headerMapToString)
 	return r
 }
 
@@ -176,6 +188,6 @@ func (b *ResponseBuilder) Build() Response {
 		statusCode: b.statusCode,
 		body:       b.body,
 		protocol:   b.protocol,
-		headers:    b.headers,
+		headers:    hashmapMapToString(b.headers, headerMapToString),
 	}
 }
