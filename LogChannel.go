@@ -29,15 +29,15 @@ type LogLevel int8
 
 const (
 	DISABLED LogLevel = -1
-	// Info lowest LogLevel
+	// INFO lowest LogLevel
 	INFO LogLevel = 0
-	// Debug LogLevel 1
+	// DEBUG LogLevel 1
 	DEBUG LogLevel = 1
-	// Warning LogLevel 2
+	// WARNING LogLevel 2
 	WARNING LogLevel = 2
-	// Error LogLevel 3
+	// ERROR LogLevel 3
 	ERROR LogLevel = 3
-	// Fatal LogLevel 4
+	// FATAL LogLevel 4
 	FATAL LogLevel = 4
 )
 
@@ -102,7 +102,7 @@ func (logChannel *LogChannel) error(message string, err error) {
 	return
 }
 
-func (LogChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string, transportProtocol *string) {
+func (logChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string, transportProtocol *string) {
 	if logChannel.level != DISABLED {
 		end := time.Now()
 		logChannel.channel <- Log{
@@ -114,7 +114,7 @@ func (LogChannel *LogChannel) logRequest(start time.Time, requestUri, requestMet
 	return
 }
 
-func (LogChannel *LogChannel) logWholeRequest(request *http.Request, response *Response) {
+func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *Response) {
 	if logChannel.level != DISABLED {
 		var sb strings.Builder
 		var body []byte

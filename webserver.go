@@ -31,7 +31,7 @@ var logChannel LogChannel
 func main() {
 	defer ants.Release()
 
-	printMinosse()
+	PrintMinosse()
 	// TODO: Provide defaults
 	configure(&config)
 	configureLogger()
@@ -84,7 +84,7 @@ func main() {
 			logChannel.channel <- Log{
 				level:   DEBUG,
 				message: "Serving with TLS enabled on: ",
-				data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", 443)},
+				data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.TLS.Port)},
 			}
 		}
 
@@ -205,8 +205,8 @@ func handleConnection(conn net.Conn) {
 	}
 
 	if req.Method != HTTP_GET_METHOD {
-		response := responseMethodNotAllowed()
-		_, err = conn.Write(response.toByte())
+		response := ResponseMethodNotAllowed()
+		_, err = conn.Write(response.ToByte())
 		return
 	}
 
@@ -215,8 +215,8 @@ func handleConnection(conn net.Conn) {
 	f, err := os.Open(pathFile)
 	if err != nil {
 		logChannel.error("File not found", err)
-		response = responseNotFound()
-		_, err = conn.Write(response.toByte())
+		response = ResponseNotFound()
+		_, err = conn.Write(response.ToByte())
 		if err != nil {
 			logChannel.error("Error writing response", err)
 		}
@@ -225,17 +225,17 @@ func handleConnection(conn net.Conn) {
 	stat, err := f.Stat()
 	if err != nil {
 		logChannel.error("Error during file stat", err)
-		response = responseInternalServerError()
-		_, err = conn.Write(response.toByte())
+		response = ResponseInternalServerError()
+		_, err = conn.Write(response.ToByte())
 		if err != nil {
 			logChannel.error("Error writing response", err)
 		}
 		return
 	} else {
-		response = responseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(pathFile)), HEADER_CONTENT_LENGTH: strconv.FormatInt(stat.Size(), 10), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
+		response = ResponseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(pathFile)), HEADER_CONTENT_LENGTH: strconv.FormatInt(stat.Size(), 10), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
 	}
 
-	_, err = conn.Write(response.responseToByteNoBody())
+	_, err = conn.Write(response.ResponseToByteNoBody())
 	if err != nil && err != io.EOF {
 		logChannel.error("Error writing response", err)
 		return

@@ -14,56 +14,56 @@ type Response struct {
 	headers    string
 }
 
-func responseMethodNotAllowed() Response {
+func ResponseMethodNotAllowed() Response {
 	return Response{
 		status:     HTTP_NOT_FOUND,
 		statusCode: 405,
 		protocol:   HTTP_1_1,
 		body:       []byte(HTTP_NOT_FOUND_BODY),
-		headers:    hashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, headerMapToString),
+		headers:    HashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, HeaderMapToString),
 	}
 }
 
-func responseInternalServerError() Response {
+func ResponseInternalServerError() Response {
 	return Response{
 		status:     HTTP_INTERNAL_SERVER_ERROR,
 		statusCode: 500,
 		body:       []byte(HTTP_INTERNAL_SERVER_ERROR),
 		protocol:   HTTP_1_1,
-		headers:    hashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, headerMapToString),
+		headers:    HashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, HeaderMapToString),
 	}
 }
 
-func responseNotFound() Response {
+func ResponseNotFound() Response {
 	return Response{
 		status:     HTTP_NOT_FOUND,
 		statusCode: 404,
 		body:       []byte(HTTP_NOT_FOUND_BODY),
 		protocol:   HTTP_1_1,
-		headers:    hashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, headerMapToString),
+		headers:    HashmapMapToString(map[string]string{HEADER_CONTENT_TYPE: "text/plain; charset=utf-8"}, HeaderMapToString),
 	}
 }
 
-func responseOkNoBody(headers map[string]string) Response {
+func ResponseOkNoBody(headers map[string]string) Response {
 	return Response{
 		status:     HTTP_OK,
 		statusCode: 200,
 		protocol:   HTTP_1_1,
-		headers:    hashmapMapToString(headers, headerMapToString),
+		headers:    HashmapMapToString(headers, HeaderMapToString),
 	}
 }
 
-func responseOk(body []byte, headers map[string]string) Response {
+func ResponseOk(body []byte, headers map[string]string) Response {
 	return Response{
 		status:     HTTP_OK,
 		statusCode: 200,
 		body:       body,
 		protocol:   HTTP_1_1,
-		headers:    hashmapMapToString(headers, headerMapToString),
+		headers:    HashmapMapToString(headers, HeaderMapToString),
 	}
 }
 
-func headerMapToString(header string, value string) string {
+func HeaderMapToString(header string, value string) string {
 	var sb strings.Builder
 
 	sb.WriteString(header)
@@ -74,7 +74,7 @@ func headerMapToString(header string, value string) string {
 	return sb.String()
 }
 
-func (r *Response) responseToByteNoBody() (res []byte) {
+func (r *Response) ResponseToByteNoBody() (res []byte) {
 	var str strings.Builder
 
 	if "" != r.protocol {
@@ -97,9 +97,9 @@ func (r *Response) responseToByteNoBody() (res []byte) {
 	return
 }
 
-// toByte Converts a Response to a byte array in order to send it back to the client via tcp.Connection.Write
-func (r *Response) toByte() (res []byte) {
-	res = append(res, r.responseToByteNoBody()...)
+// ToByte Converts a Response to a byte array in order to send it back to the client via tcp.Connection.Write
+func (r *Response) ToByte() (res []byte) {
+	res = append(res, r.ResponseToByteNoBody()...)
 	if nil != r.body {
 		res = append(res, r.body...)
 	}
@@ -138,7 +138,7 @@ func (r *Response) Header(header, value string) *Response {
 */
 
 func (r *Response) Headers(headers map[string]string) *Response {
-	r.headers = hashmapMapToString(headers, headerMapToString)
+	r.headers = HashmapMapToString(headers, HeaderMapToString)
 	return r
 }
 
@@ -151,31 +151,31 @@ func newResponseBuilder() *ResponseBuilder {
 	}
 }
 
-// Status Configure status for current ResponseBuilder
+// Status configure status for current ResponseBuilder
 func (b *ResponseBuilder) Status(status string) *ResponseBuilder {
 	b.status = status
 	return b
 }
 
-// StatusCode Configure status code for current ResponseBuilder
+// StatusCode configure status code for current ResponseBuilder
 func (b *ResponseBuilder) StatusCode(code int) *ResponseBuilder {
 	b.statusCode = code
 	return b
 }
 
-// Body Configure body for current ResponseBuilder
+// Body configure body for current ResponseBuilder
 func (b *ResponseBuilder) Body(body []byte) *ResponseBuilder {
 	b.body = body
 	return b
 }
 
-// Protocol Configure protocol for current ResponseBuilder
+// Protocol configure protocol for current ResponseBuilder
 func (b *ResponseBuilder) Protocol(proto string) *ResponseBuilder {
 	b.protocol = proto
 	return b
 }
 
-// Header Configure a single header for current ResponseBuilder. Can be called multiple times for different headers.
+// Header configure a single header for current ResponseBuilder. Can be called multiple times for different headers.
 func (b *ResponseBuilder) Header(key string, value string) *ResponseBuilder {
 	b.headers[key] = value
 	return b
@@ -188,6 +188,6 @@ func (b *ResponseBuilder) Build() Response {
 		statusCode: b.statusCode,
 		body:       b.body,
 		protocol:   b.protocol,
-		headers:    hashmapMapToString(b.headers, headerMapToString),
+		headers:    HashmapMapToString(b.headers, HeaderMapToString),
 	}
 }

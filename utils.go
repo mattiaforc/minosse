@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func hashmapMapToString(m map[string]string, f func(string, string) string) string {
+func HashmapMapToString(m map[string]string, f func(string, string) string) string {
 	var str strings.Builder
 
 	for k, v := range m {
@@ -14,7 +14,7 @@ func hashmapMapToString(m map[string]string, f func(string, string) string) stri
 	return str.String()
 }
 
-func printMinosse() {
+func PrintMinosse() {
 	asciiArt :=
 		`
  __   __  ___   __    _  _______  _______  _______  _______ 
