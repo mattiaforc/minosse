@@ -116,6 +116,11 @@ func (logChannel *LogChannel) logRequest(start time.Time, requestUri, requestMet
 
 func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *Response) {
 	if logChannel.level != DISABLED {
+		if request == nil {
+			logChannel.channel <- Log{level: ERROR, message: "Nil request"}
+			return
+		}
+
 		var sb strings.Builder
 		var body []byte
 
