@@ -114,13 +114,14 @@ func (logChannel *LogChannel) logRequest(start time.Time, requestUri, requestMet
 	return
 }
 
-func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *Response) {
+func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *Response, start *time.Time) {
 	if logChannel.level != DISABLED {
 		if request == nil {
 			logChannel.channel <- Log{level: ERROR, message: "Nil request"}
 			return
 		}
 
+		end := time.Now()
 		var sb strings.Builder
 		var body []byte
 
@@ -149,6 +150,7 @@ func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *R
 				zap.String("request_headers", sb.String()),
 				zap.String("request_body", string(body)),
 				zap.String("request_remote_address", request.RemoteAddr),
+				zap.Duration("duration", end.Sub(*start)),
 			},
 		}
 	}

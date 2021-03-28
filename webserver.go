@@ -13,10 +13,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 
-	"github.com/panjf2000/ants/v2"
 	"github.com/pelletier/go-toml"
 	"go.uber.org/ratelimit"
 	"go.uber.org/zap"
@@ -29,7 +29,6 @@ var config Config
 var logChannel LogChannel
 
 func main() {
-	defer ants.Release()
 
 	PrintMinosse()
 	// TODO: Provide defaults
@@ -50,7 +49,6 @@ func main() {
 			data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port), zap.String("root", config.Minosse.WebRoot)},
 		}
 	}
-	go listen(listener, newConnections)
 
 	if config.Minosse.TLS.Enabled {
 		cert, err := tls.LoadX509KeyPair(config.Minosse.TLS.X509CertPath, config.Minosse.TLS.X509KeyPath)
@@ -98,42 +96,21 @@ func main() {
 		rl = ratelimit.NewUnlimited()
 	}
 
-	var pool *ants.PoolWithFunc
-
-	if config.Ants.Enabled {
-		pool, err = ants.NewPoolWithFunc(config.Ants.PoolSize, func(c interface{}) {
-			handleConnection(c.(net.Conn))
-		}, func(opts *ants.Options) {
-			options := ants.Options{
-				ExpiryDuration:   config.Ants.ExpiryDuration,
-				PreAlloc:         config.Ants.PreAlloc,
-				MaxBlockingTasks: config.Ants.MaxBlockingTasks,
-				Nonblocking:      config.Ants.Nonblocking,
-			}
-			*opts = options
-		})
-	}
-
-	if config.Ants.Enabled {
-		for {
-			select {
-			case c := <-newConnections:
-				rl.Take()
-				err = pool.Invoke(c)
-				if err != nil {
-					logChannel.error("Pool error", err)
-				}
-			}
-		}
+	// TODO: refactor in common default values
+	var maxWorkers int
+	if config.Minosse.MaxProcessNumber == 0 {
+		maxWorkers = runtime.GOMAXPROCS(0)
+		logChannel.channel <- Log{level: INFO, message: "Using default GOMAXPROCS workers", data: []zap.Field{zap.Int("GOMAXPROCS", runtime.GOMAXPROCS(0))}}
 	} else {
-		for {
-			select {
-			case c := <-newConnections:
-				rl.Take()
-				go handleConnection(c)
-			}
-		}
+		maxWorkers = config.Minosse.MaxProcessNumber
+		logChannel.channel <- Log{level: INFO, message: "Using specified amount of workers", data: []zap.Field{zap.Int("Workers", maxWorkers)}}
 	}
+
+	for w := 0; w < maxWorkers; w++ {
+		go worker(newConnections, rl)
+	}
+
+	listen(listener, newConnections)
 }
 
 func configure(conf *Config) {
@@ -181,8 +158,17 @@ func listen(l net.Listener, newConnections chan net.Conn) {
 	}
 }
 
+func worker(newConnections chan net.Conn, rl ratelimit.Limiter) {
+	// TODO: Possibly reuse memory?
+	for c := range newConnections {
+		rl.Take()
+		handleConnection(c)
+	}
+}
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
+	start := time.Now()
 
 	if err := conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(config.Minosse.Connections.ReadTimeout))); err != nil {
 		logChannel.error("Error setting read deadline", err)
@@ -197,7 +183,7 @@ func handleConnection(conn net.Conn) {
 	var response Response
 
 	req, err := http.ReadRequest(bufio.NewReader(conn))
-	defer logChannel.logWholeRequest(req, &response)
+	defer logChannel.logWholeRequest(req, &response, &start)
 
 	if err != nil {
 		logChannel.error("Error reading request", err)

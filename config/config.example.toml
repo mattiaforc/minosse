@@ -18,13 +18,5 @@ X509RootCAPath = "private/rootCA.pem"
 enabled = false
 port = 443
 
-[ants]
-enabled = false
-poolSize = 100
-expiryDuration = 30
-preAlloc = true
-maxBlockingTasks = 10
-nonBlocking = false
-
 [zap]
-mode = "development"
+mode = "production"
