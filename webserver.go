@@ -42,12 +42,10 @@ func main() {
 		logChannel.fatalError("Error when trying to listen at specified address:port", err)
 		return
 	}
-	if logChannel.level != DISABLED {
-		logChannel.channel <- Log{
-			level:   DEBUG,
-			message: "Minosse server started",
-			data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port), zap.String("root", config.Minosse.WebRoot)},
-		}
+	logChannel.channel <- Log{
+		level:   DEBUG,
+		message: "Minosse server started",
+		data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port), zap.String("root", config.Minosse.WebRoot)},
 	}
 
 	if config.Minosse.TLS.Enabled {
@@ -78,12 +76,10 @@ func main() {
 			logChannel.fatalError("Error when trying to listen at specified address:port", err)
 			return
 		}
-		if logChannel.level != DISABLED {
-			logChannel.channel <- Log{
-				level:   DEBUG,
-				message: "Serving with TLS enabled on: ",
-				data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.TLS.Port)},
-			}
+		logChannel.channel <- Log{
+			level:   DEBUG,
+			message: "Serving with TLS enabled on: ",
+			data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.TLS.Port)},
 		}
 
 		go listen(tlsListener, newConnections)
@@ -159,14 +155,16 @@ func listen(l net.Listener, newConnections chan net.Conn) {
 }
 
 func worker(newConnections chan net.Conn, rl ratelimit.Limiter) {
-	// TODO: Possibly reuse memory?
+	var req http.Request
+	bufferedReader := bufio.NewReader(nil)
+
 	for c := range newConnections {
 		rl.Take()
-		handleConnection(c)
+		handleConnection(c, &req, bufferedReader)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Reader) {
 	defer conn.Close()
 	start := time.Now()
 
@@ -179,10 +177,9 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 
-	var req *http.Request
 	var response Response
-
-	req, err := http.ReadRequest(bufio.NewReader(conn))
+	bufferedReader.Reset(conn)
+	req, err := http.ReadRequest(bufferedReader)
 	defer logChannel.logWholeRequest(req, &response, &start)
 
 	if err != nil {
@@ -191,12 +188,12 @@ func handleConnection(conn net.Conn) {
 	}
 
 	if req.Method != HTTP_GET_METHOD {
-		response := ResponseMethodNotAllowed()
+		response = ResponseMethodNotAllowed()
 		_, err = conn.Write(response.ToByte())
 		return
 	}
 
-	var pathFile = config.Minosse.WebRoot + filepath.Clean(req.URL.String())
+	pathFile := config.Minosse.WebRoot + filepath.Clean(req.URL.String())
 
 	f, err := os.Open(pathFile)
 	if err != nil {

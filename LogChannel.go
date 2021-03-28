@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"go.uber.org/zap"
 )
 
@@ -28,7 +29,7 @@ type Log struct {
 type LogLevel int8
 
 const (
-	DISABLED LogLevel = -1
+	DISABLED LogLevel = 100
 	// INFO lowest LogLevel
 	INFO LogLevel = 0
 	// DEBUG LogLevel 1
@@ -64,13 +65,19 @@ func (logChannel LogChannel) handleLog() {
 				logChannel.logger.Debug(log.message, log.data...)
 				break
 			case WARNING:
+				color.Set(color.FgYellow)
 				logChannel.logger.Warn(log.message, log.data...)
+				color.Unset()
 				break
 			case ERROR:
+				color.Set(color.FgRed)
 				logChannel.logger.Error(log.message, log.data...)
+				color.Unset()
 				break
 			case FATAL:
+				color.Set(color.FgHiRed)
 				logChannel.logger.Fatal(log.message, log.data...)
+				color.Unset()
 				break
 			default:
 				logChannel.logger.Error(fmt.Sprintf("MINOSSE: LOG LEVEL %d UNDEFINED", log.level))
@@ -81,78 +88,77 @@ func (logChannel LogChannel) handleLog() {
 }
 
 func (logChannel *LogChannel) fatalError(message string, err error) {
-	if logChannel.level != DISABLED {
-		logChannel.channel <- Log{
-			level:   FATAL,
-			message: message,
-			data:    []zap.Field{zap.Error(err)},
-		}
+	logChannel.channel <- Log{
+		level:   FATAL,
+		message: message,
+		data:    []zap.Field{zap.Error(err)},
 	}
 	return
 }
 
 func (logChannel *LogChannel) error(message string, err error) {
-	if logChannel.level != DISABLED {
-		logChannel.channel <- Log{
-			level:   ERROR,
-			message: message,
-			data:    []zap.Field{zap.Error(err)},
-		}
+	logChannel.channel <- Log{
+		level:   ERROR,
+		message: message,
+		data:    []zap.Field{zap.Error(err)},
 	}
 	return
 }
 
 func (logChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string, transportProtocol *string) {
-	if logChannel.level != DISABLED {
-		end := time.Now()
-		logChannel.channel <- Log{
-			level:   INFO,
-			message: "Request received",
-			data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr), zap.String("Transport protocol", *transportProtocol)},
-		}
+	end := time.Now()
+	logChannel.channel <- Log{
+		level:   INFO,
+		message: "Request received",
+		data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr), zap.String("Transport protocol", *transportProtocol)},
 	}
 	return
 }
 
 func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *Response, start *time.Time) {
-	if logChannel.level != DISABLED {
-		if request == nil {
-			logChannel.channel <- Log{level: ERROR, message: "Nil request"}
-			return
-		}
+	if request == nil {
+		logChannel.channel <- Log{level: ERROR, message: "Nil request"}
+		return
+	}
+	if response == nil {
+		logChannel.channel <- Log{level: ERROR, message: "Nil response"}
+		return
+	}
+	if response.statusCode == 0 {
+		panic(response)
+	}
 
-		end := time.Now()
-		var sb strings.Builder
-		var body []byte
+	end := time.Now()
+	var sb strings.Builder
+	var body []byte
 
-		_, err := request.Body.Read(body)
-		if err != nil && err != io.EOF {
-			logChannel.error("Error while reading request body", err)
-		}
+	_, err := request.Body.Read(body)
+	if err != nil && err != io.EOF {
+		logChannel.error("Error while reading request body", err)
+	}
 
-		for key, val := range request.Header {
-			sb.WriteString(key)
-			sb.WriteString(": ")
-			for _, headerVal := range val {
-				sb.WriteString(headerVal)
-			}
-			sb.WriteString(", ")
+	for key, val := range request.Header {
+		sb.WriteString(key)
+		sb.WriteString(": ")
+		for _, headerVal := range val {
+			sb.WriteString(headerVal)
 		}
+		sb.WriteString(", ")
+	}
 
-		logChannel.channel <- Log{
-			level:   INFO,
-			message: ">>>>",
-			data: []zap.Field{
-				zap.Int("response_code", response.statusCode),
-				zap.String("response_status", response.status),
-				zap.String("request_method", request.Method),
-				zap.String("request_uri", request.URL.String()),
-				zap.String("request_headers", sb.String()),
-				zap.String("request_body", string(body)),
-				zap.String("request_remote_address", request.RemoteAddr),
-				zap.Duration("duration", end.Sub(*start)),
-			},
-		}
+	logChannel.channel <- Log{
+		level:   INFO,
+		message: ">>>>",
+		data: []zap.Field{
+			zap.Int("response_code", response.statusCode),
+			zap.String("response_status", response.status),
+			zap.String("request_method", request.Method),
+			zap.String("request_uri", request.URL.String()),
+			zap.String("request_headers", sb.String()),
+			zap.String("request_body", string(body)),
+			zap.String("request_remote_address", request.RemoteAddr),
+			zap.Duration("duration", end.Sub(*start)),
+		},
 	}
 	return
 }
