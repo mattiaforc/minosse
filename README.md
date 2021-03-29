@@ -9,12 +9,11 @@ A simple, fast, easily configurable, pocket-sized static file server written in 
 # Features
 
 - Configurable static file server
-- Concurrent requests handling
 - Leaky bucket rate limiting
 - Blazing fast, coroutine based json logging with [uber/zap](https://github.com/uber-go/zap) logging library
-- Easily configurable with dedicated `.toml` config file
-- Slim sized (~5.5M) and small (a few files and ~300 LOC)
-- Includes runnable out-of-the-box benchmark load tests with [k6](https://k6.io)! (requires Docker)
+- Dedicated `.toml` config file
+- Slim sized (~5.5M) and small (just a few files and ~1k LOC)
+- Includes runnable out-of-the-box benchmark load tests with [k6](https://k6.io)! (Docker-ready)
 - Currently supports only GET requests and HTTP/1.1
 
 # Configuration
@@ -34,6 +33,7 @@ log = 0
 port = 8080
 server = "0.0.0.0"
 webroot = "public" # This could be a relative path or an absolute one
+maxProcessNumbers = 8 # Defaults to GOMAXPROCS
 
 [minosse.connections]
 # Leaky bucket rate limiting.

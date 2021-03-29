@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"mime"
 	"net"
 	"net/http"
@@ -31,12 +32,11 @@ var logChannel LogChannel
 func main() {
 
 	PrintMinosse()
-	// TODO: Provide defaults
 	configure(&config)
 	configureLogger()
+	applyDefaultConfigValues(&config)
 
 	newConnections := make(chan net.Conn)
-
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.Port))
 	if err != nil {
 		logChannel.fatalError("Error when trying to listen at specified address:port", err)
@@ -92,16 +92,7 @@ func main() {
 		rl = ratelimit.NewUnlimited()
 	}
 
-	// TODO: refactor in common default values
-	var maxWorkers int
-	if config.Minosse.MaxProcessNumber == 0 {
-		maxWorkers = runtime.GOMAXPROCS(0)
-		logChannel.channel <- Log{level: INFO, message: "Using default GOMAXPROCS workers", data: []zap.Field{zap.Int("GOMAXPROCS", runtime.GOMAXPROCS(0))}}
-	} else {
-		maxWorkers = config.Minosse.MaxProcessNumber
-		logChannel.channel <- Log{level: INFO, message: "Using specified amount of workers", data: []zap.Field{zap.Int("Workers", maxWorkers)}}
-	}
-
+	maxWorkers := config.Minosse.MaxProcessNumber
 	for w := 0; w < maxWorkers; w++ {
 		go worker(newConnections, rl)
 	}
@@ -122,18 +113,73 @@ func configure(conf *Config) {
 	}
 }
 
+func applyDefaultConfigValues(conf *Config) {
+	// Server
+	if conf.Minosse.Server == "" {
+		conf.Minosse.Server = "localhost"
+		logChannel.channel <- Log{level: INFO, message: "Using localhost as server url"}
+	}
+	// Server port
+	if conf.Minosse.Port == 0 {
+		logChannel.channel <- Log{level: INFO, message: "Using 8080 as default server port"}
+		conf.Minosse.Port = 8080
+	}
+	// Max process number
+	if conf.Minosse.MaxProcessNumber == 0 {
+		conf.Minosse.MaxProcessNumber = runtime.GOMAXPROCS(0)
+		logChannel.channel <- Log{level: INFO, message: "Using default GOMAXPROCS workers", data: []zap.Field{zap.Int("GOMAXPROCS", runtime.GOMAXPROCS(0))}}
+	} else {
+		logChannel.channel <- Log{level: INFO, message: "Using specified amount of workers", data: []zap.Field{zap.Int("Workers", conf.Minosse.MaxProcessNumber)}}
+	}
+	// X509 - TLS
+	if conf.Minosse.TLS.Enabled {
+		if conf.Minosse.TLS.X509CertPath == "" {
+			logChannel.fatalError("TLS is enabled, but no X509 certificate path was specified in current configuration", nil)
+		}
+		if conf.Minosse.TLS.X509RootCAPath == "" {
+			logChannel.fatalError("TLS is enabled, but no X509 Root CA path was specified in current configuration", nil)
+		}
+		if conf.Minosse.TLS.X509KeyPath == "" {
+			logChannel.fatalError("TLS is enabled, but no X509 key path was specified in current configuration", nil)
+		}
+		if conf.Minosse.TLS.Port == 0 {
+			conf.Minosse.TLS.Port = 8000
+		}
+	}
+	// Web root
+	if conf.Minosse.WebRoot == "" {
+		logChannel.fatalError("No webroot was specified in current configuration", nil)
+	}
+	// Connection timeout
+	if conf.Minosse.Connections.ReadTimeout == 0 {
+		logChannel.channel <- Log{level: INFO, message: "Using default connection read timeout of 30 seconds"}
+		conf.Minosse.Connections.ReadTimeout = 30
+	}
+	if conf.Minosse.Connections.WriteTimeout == 0 {
+		logChannel.channel <- Log{level: INFO, message: "Using default connection write timeout of 30 seconds"}
+		conf.Minosse.Connections.WriteTimeout = 30
+	}
+}
+
 func configureLogger() {
 	var logger *zap.Logger
 	switch config.Zap.Mode {
-	// TODO: Handle errors
 	case "development":
-		logger, _ = zap.NewDevelopment()
+		var err error
+		logger, err = zap.NewDevelopment()
+		if err != nil {
+			log.Fatalf("Could not instantiate zap logger. %v", err)
+		}
 		break
 	case "production":
-		logger, _ = zap.NewProduction()
+		var err error
+		logger, err = zap.NewProduction()
+		if err != nil {
+			log.Fatalf("Could not instantiate zap logger. %v", err)
+		}
 		break
 	default:
-		logger = zap.NewExample()
+		log.Fatalf("Zap logger mode %s is invalid. Possible values are: development | production", config.Zap.Mode)
 	}
 	logChannel = newLogChannel(logger, &config)
 

@@ -93,7 +93,6 @@ func (logChannel *LogChannel) fatalError(message string, err error) {
 		message: message,
 		data:    []zap.Field{zap.Error(err)},
 	}
-	return
 }
 
 func (logChannel *LogChannel) error(message string, err error) {
@@ -102,7 +101,6 @@ func (logChannel *LogChannel) error(message string, err error) {
 		message: message,
 		data:    []zap.Field{zap.Error(err)},
 	}
-	return
 }
 
 func (logChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string, transportProtocol *string) {
@@ -112,7 +110,6 @@ func (logChannel *LogChannel) logRequest(start time.Time, requestUri, requestMet
 		message: "Request received",
 		data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr), zap.String("Transport protocol", *transportProtocol)},
 	}
-	return
 }
 
 func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *Response, start *time.Time) {
@@ -160,5 +157,4 @@ func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *R
 			zap.Duration("duration", end.Sub(*start)),
 		},
 	}
-	return
 }

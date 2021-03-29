@@ -2,21 +2,21 @@ title = "Example minosse configuration"
 
 [minosse]
 log = 0
-port = 8080
-server = "0.0.0.0"
+# port = 8080
+# server = "0.0.0.0"
 webroot = "public"
 
 [minosse.connections]
 # maxConnections = 500
-readTimeout = 30
-writeTimeout = 30
+# readTimeout = 30
+# writeTimeout = 30
 
 [minosse.tls]
 X509CertPath = "private/client.crt"
 X509KeyPath = "private/client.key"
 X509RootCAPath = "private/rootCA.pem"
 enabled = false
-port = 443
+# port = 443
 
 [zap]
 mode = "production"
