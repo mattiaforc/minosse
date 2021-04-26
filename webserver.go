@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -14,8 +16,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pelletier/go-toml"
@@ -28,6 +32,7 @@ const SocketWriteTimeout = 30
 
 var config Config
 var logChannel LogChannel
+var excludePattern *regexp.Regexp
 
 func main() {
 
@@ -149,6 +154,8 @@ func applyDefaultConfigValues(conf *Config) {
 	// Web root
 	if conf.Minosse.WebRoot == "" {
 		logChannel.fatalError("No webroot was specified in current configuration", nil)
+	} else {
+		logChannel.channel <- Log{level: INFO, message: "Serving static files", data: []zap.Field{zap.String("Directory", conf.Minosse.WebRoot)}}
 	}
 	// Connection timeout
 	if conf.Minosse.Connections.ReadTimeout == 0 {
@@ -158,6 +165,26 @@ func applyDefaultConfigValues(conf *Config) {
 	if conf.Minosse.Connections.WriteTimeout == 0 {
 		logChannel.channel <- Log{level: INFO, message: "Using default connection write timeout of 30 seconds"}
 		conf.Minosse.Connections.WriteTimeout = 30
+	}
+	// Gzip
+	if conf.Minosse.Gzip.Enabled {
+		if conf.Minosse.Gzip.Exclude == "" {
+			logChannel.channel <- Log{level: INFO, message: "Using default gzip configuration will NOT compress images and pdf files"}
+			conf.Minosse.Gzip.Exclude = "(jpeg|jpg|png|pdf)$"
+		}
+		if conf.Minosse.Gzip.Level == 0 {
+			logChannel.channel <- Log{level: INFO, message: "Using default gzip compression level. You can specify the compression level in the configuration file; possible values range from 1 (Best speed) to 9 (Best compression)"}
+			conf.Minosse.Gzip.Level = gzip.DefaultCompression
+		} else {
+			if conf.Minosse.Gzip.Level > 9 { logChannel.fatalError("The specified gzip level is not valid. Possible values range from 1 (Best speed) to 9 (Best compression)", nil) }
+		}
+		if conf.Minosse.Gzip.Threshold == 0 {
+			logChannel.channel <- Log{level: INFO, message: "Using default gzip file-size threshold. File under 1.5KB will not be compressed."}
+			conf.Minosse.Gzip.Threshold = 1500
+		} else {
+			if conf.Minosse.Gzip.Threshold < 0 { logChannel.fatalError("The specified gzip file size threshold is invalid because it is negative.", nil) }
+		}
+		excludePattern = regexp.MustCompile(conf.Minosse.Gzip.Exclude)
 	}
 }
 
@@ -210,6 +237,10 @@ func worker(newConnections chan net.Conn, rl ratelimit.Limiter) {
 	}
 }
 
+func gzipFilter(f os.FileInfo) bool {
+	return f.Size() > config.Minosse.Gzip.Threshold && !excludePattern.MatchString(f.Name())
+}
+
 func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Reader) {
 	defer conn.Close()
 	start := time.Now()
@@ -223,6 +254,7 @@ func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Re
 		return
 	}
 
+	var gzb bytes.Buffer
 	var response Response
 	bufferedReader.Reset(conn)
 	req, err := http.ReadRequest(bufferedReader)
@@ -239,8 +271,12 @@ func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Re
 		return
 	}
 
-	pathFile := config.Minosse.WebRoot + filepath.Clean(req.URL.String())
+	gzipEnabled := false
+	if encoding := req.Header.Get("Accept-Encoding"); encoding != "" {
+		gzipEnabled = config.Minosse.Gzip.Enabled && strings.Contains(encoding, GZIP)
+	}
 
+	pathFile := config.Minosse.WebRoot + filepath.Clean(req.URL.String())
 	f, err := os.Open(pathFile)
 	if err != nil {
 		logChannel.error("File not found", err)
@@ -261,7 +297,23 @@ func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Re
 		}
 		return
 	} else {
-		response = ResponseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(pathFile)), HEADER_CONTENT_LENGTH: strconv.FormatInt(stat.Size(), 10), HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
+		var encoding string
+		var contentLength string
+		gzipEnabled = gzipEnabled && gzipFilter(stat)
+		if gzipEnabled {
+			encoding = "gzip"
+			gzipWriter, _ := gzip.NewWriterLevel(&gzb, config.Minosse.Gzip.Level)
+			if _, err := io.Copy(gzipWriter, f); err != nil {
+				logChannel.error("Error during gzip compression", err)
+				return
+			}
+			if err := gzipWriter.Close(); err != nil {
+				logChannel.error("Error while closing gzip compression", err)
+				return
+			}
+			contentLength = strconv.FormatInt(int64(gzb.Len()), 10)
+		} else { encoding="identity"; contentLength = strconv.FormatInt(stat.Size(), 10) }
+		response = ResponseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(pathFile)), HEADER_CONTENT_LENGTH: contentLength, HEADER_CONTENT_ENCODING: encoding, HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
 	}
 
 	_, err = conn.Write(response.ResponseToByteNoBody())
@@ -270,9 +322,15 @@ func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Re
 		return
 	}
 
-	_, err = io.Copy(conn, f)
-	if err != nil {
-		logChannel.error("Error writing response", err)
-		return
+	if gzipEnabled {
+		if _, err := io.Copy(conn, &gzb); err != nil {
+			logChannel.error("Error writing response", err)
+			return
+		}
+	} else {
+		if _, err := io.Copy(conn, f); err != nil {
+			logChannel.error("Error writing response", err)
+			return
+		}
 	}
 }

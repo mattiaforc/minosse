@@ -14,7 +14,15 @@ type Minosse struct {
 	Log         LogLevel
 	Connections Connections
 	TLS         TLS
+	Gzip		GZip
 	MaxProcessNumber int
+}
+// GZip configurations
+type GZip struct {
+	Enabled bool
+	Level int
+	Threshold int64
+	Exclude string
 }
 
 // Connections Configurations regarding connections
