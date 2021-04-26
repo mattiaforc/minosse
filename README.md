@@ -35,6 +35,12 @@ server = "0.0.0.0"
 webroot = "public" # This could be a relative path or an absolute one
 maxProcessNumbers = 8 # Defaults to GOMAXPROCS
 
+[minosse.gzip]
+enabled = true
+level = 6 # from 1 (best speed), to 9 (best compression)
+# exclude = "regexp". Defaults to "(jpg|jpeg|png|pdf)$"
+# threshold = 1500 (the threshold for using gzip, expressed in bytes)
+
 [minosse.connections]
 # Leaky bucket rate limiting.
 # Maximum number of concurrent connections. 
