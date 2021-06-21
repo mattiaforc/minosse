@@ -7,6 +7,6 @@ export let options = {
 };
 
 export default function () {
-    let res = http.get('http://host.docker.internal:8080/public/index.html')
+    let res = http.get('http://host.docker.internal:8080/index.html')
     check(res, {"Response code 200": (res) => res.status === 200})
 }

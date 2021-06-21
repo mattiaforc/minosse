@@ -63,7 +63,7 @@ func ResponseOk(body []byte, headers map[string]string) Response {
 	}
 }
 
-func HeaderMapToString(header string, value string) string {
+func HeaderMapToString(header, value string) string {
 	var sb strings.Builder
 
 	sb.WriteString(header)
@@ -77,19 +77,19 @@ func HeaderMapToString(header string, value string) string {
 func (r *Response) ResponseToByteNoBody() (res []byte) {
 	var str strings.Builder
 
-	if "" != r.protocol {
+	if r.protocol != "" {
 		str.WriteString(r.protocol)
 		str.WriteString(SPACE)
 	}
-	if 0 != r.statusCode {
+	if r.statusCode != 0 {
 		str.WriteString(strconv.Itoa(r.statusCode))
 		str.WriteString(SPACE)
 	}
-	if "" != r.status {
+	if r.status != "" {
 		str.WriteString(r.status)
 		str.WriteString(EOL)
 	}
-	if "" != r.headers {
+	if r.headers != "" {
 		str.WriteString(r.headers)
 		str.WriteString(EOL)
 	}
@@ -142,15 +142,6 @@ func (r *Response) Headers(headers map[string]string) *Response {
 	return r
 }
 
-// newResponseBuilder Initializes a ResponseBuilder
-func newResponseBuilder() *ResponseBuilder {
-	return &ResponseBuilder{
-		body:     nil,
-		protocol: "HTTP/1.1",
-		headers:  make(map[string]string),
-	}
-}
-
 // Status configure status for current ResponseBuilder
 func (b *ResponseBuilder) Status(status string) *ResponseBuilder {
 	b.status = status
@@ -176,7 +167,7 @@ func (b *ResponseBuilder) Protocol(proto string) *ResponseBuilder {
 }
 
 // Header configure a single header for current ResponseBuilder. Can be called multiple times for different headers.
-func (b *ResponseBuilder) Header(key string, value string) *ResponseBuilder {
+func (b *ResponseBuilder) Header(key, value string) *ResponseBuilder {
 	b.headers[key] = value
 	return b
 }

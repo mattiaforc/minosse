@@ -60,28 +60,22 @@ func (logChannel LogChannel) handleLog() {
 			switch log.level {
 			case INFO:
 				logChannel.logger.Info(log.message, log.data...)
-				break
 			case DEBUG:
 				logChannel.logger.Debug(log.message, log.data...)
-				break
 			case WARNING:
 				color.Set(color.FgYellow)
 				logChannel.logger.Warn(log.message, log.data...)
 				color.Unset()
-				break
 			case ERROR:
 				color.Set(color.FgRed)
 				logChannel.logger.Error(log.message, log.data...)
 				color.Unset()
-				break
 			case FATAL:
 				color.Set(color.FgHiRed)
 				logChannel.logger.Fatal(log.message, log.data...)
 				color.Unset()
-				break
 			default:
 				logChannel.logger.Error(fmt.Sprintf("MINOSSE: LOG LEVEL %d UNDEFINED", log.level))
-				break
 			}
 		}
 	}
@@ -100,15 +94,6 @@ func (logChannel *LogChannel) error(message string, err error) {
 		level:   ERROR,
 		message: message,
 		data:    []zap.Field{zap.Error(err)},
-	}
-}
-
-func (logChannel *LogChannel) logRequest(start time.Time, requestUri, requestMethod *string, statusCode *int, remoteAddr *string, transportProtocol *string) {
-	end := time.Now()
-	logChannel.channel <- Log{
-		level:   INFO,
-		message: "Request received",
-		data:    []zap.Field{zap.String("URI", *requestUri), zap.String("Method", *requestMethod), zap.Int("Status", *statusCode), zap.Duration("Duration: ", end.Sub(start)), zap.String("Remote address", *remoteAddr), zap.String("Transport protocol", *transportProtocol)},
 	}
 }
 

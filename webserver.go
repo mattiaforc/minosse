@@ -74,7 +74,7 @@ func main() {
 			}
 		}
 
-		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: rootCAPool}
+		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: rootCAPool, MinVersion: tls.VersionTLS12}
 
 		tlsListener, err := tls.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.TLS.Port), tlsConfig)
 		if err != nil {
@@ -175,14 +175,14 @@ func applyDefaultConfigValues(conf *Config) {
 		if conf.Minosse.Gzip.Level == 0 {
 			logChannel.channel <- Log{level: INFO, message: "Using default gzip compression level. You can specify the compression level in the configuration file; possible values range from 1 (Best speed) to 9 (Best compression)"}
 			conf.Minosse.Gzip.Level = gzip.DefaultCompression
-		} else {
-			if conf.Minosse.Gzip.Level > 9 { logChannel.fatalError("The specified gzip level is not valid. Possible values range from 1 (Best speed) to 9 (Best compression)", nil) }
+		} else if conf.Minosse.Gzip.Level > 9 {
+			logChannel.fatalError("The specified gzip level is not valid. Possible values range from 1 (Best speed) to 9 (Best compression)", nil)
 		}
 		if conf.Minosse.Gzip.Threshold == 0 {
 			logChannel.channel <- Log{level: INFO, message: "Using default gzip file-size threshold. File under 1.5KB will not be compressed."}
 			conf.Minosse.Gzip.Threshold = 1500
-		} else {
-			if conf.Minosse.Gzip.Threshold < 0 { logChannel.fatalError("The specified gzip file size threshold is invalid because it is negative.", nil) }
+		} else if conf.Minosse.Gzip.Threshold < 0 {
+			logChannel.fatalError("The specified gzip file size threshold is invalid because it is negative.", nil)
 		}
 		excludePattern = regexp.MustCompile(conf.Minosse.Gzip.Exclude)
 	}
@@ -197,14 +197,12 @@ func configureLogger() {
 		if err != nil {
 			log.Fatalf("Could not instantiate zap logger. %v", err)
 		}
-		break
 	case "production":
 		var err error
 		logger, err = zap.NewProduction()
 		if err != nil {
 			log.Fatalf("Could not instantiate zap logger. %v", err)
 		}
-		break
 	default:
 		log.Fatalf("Zap logger mode %s is invalid. Possible values are: development | production", config.Zap.Mode)
 	}
@@ -216,6 +214,9 @@ func configureLogger() {
 }
 
 func listen(l net.Listener, newConnections chan net.Conn) {
+	defer close(newConnections)
+	defer close(logChannel.channel)
+
 	for {
 		c, err := l.Accept()
 		if err != nil {
@@ -268,6 +269,9 @@ func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Re
 	if req.Method != HTTP_GET_METHOD {
 		response = ResponseMethodNotAllowed()
 		_, err = conn.Write(response.ToByte())
+		if err != nil {
+			logChannel.error("Error writing response", err)
+		}
 		return
 	}
 
@@ -312,7 +316,10 @@ func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Re
 				return
 			}
 			contentLength = strconv.FormatInt(int64(gzb.Len()), 10)
-		} else { encoding="identity"; contentLength = strconv.FormatInt(stat.Size(), 10) }
+		} else {
+			encoding = "identity"
+			contentLength = strconv.FormatInt(stat.Size(), 10)
+		}
 		response = ResponseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(pathFile)), HEADER_CONTENT_LENGTH: contentLength, HEADER_CONTENT_ENCODING: encoding, HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
 	}
 
