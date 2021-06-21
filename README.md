@@ -1,6 +1,6 @@
 # Minosse
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/mattiaforc/minosse)](https://goreportcard.com/report/github.com/mattiaforc/minosse)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mattiaforc/minosse)](https://goreportcard.com/report/github.com/mattiaforc/minosse) [![DeepSource](https://deepsource.io/gh/mattiaforc/minosse.svg/?label=active+issues&show_trend=true&token=z4fqvDDaQ8DUieUJyshHWC1g)](https://deepsource.io/gh/mattiaforc/minosse/?ref=repository-badge)
 
 A simple, fast, easily configurable, pocket-sized static file server written in Go.
 
