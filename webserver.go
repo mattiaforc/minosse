@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"crypto/tls"
@@ -15,14 +14,13 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/pelletier/go-toml"
+	"github.com/valyala/fasthttp"
 	"go.uber.org/ratelimit"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -238,12 +236,12 @@ func listen(l net.Listener, newConnections chan net.Conn) {
 }
 
 func worker(newConnections chan net.Conn, rl ratelimit.Limiter) {
-	var req http.Request
-	bufferedReader := bufio.NewReader(nil)
-
 	for c := range newConnections {
 		rl.Take()
-		handleConnection(c, &req, bufferedReader)
+		err := fasthttp.ServeConn(c, handleConnection)
+		if err != nil {
+			logChannel.error("Error while serving connection", err)
+		}
 	}
 }
 
@@ -251,63 +249,41 @@ func gzipFilter(f os.FileInfo) bool {
 	return f.Size() > config.Minosse.Gzip.Threshold && !excludePattern.MatchString(f.Name())
 }
 
-func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Reader) {
-	defer conn.Close()
+func handleConnection(ctx *fasthttp.RequestCtx) {
 	start := time.Now()
-
-	if err := conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(config.Minosse.Connections.ReadTimeout))); err != nil {
-		logChannel.error("Error setting read deadline", err)
-		return
-	}
-	if err := conn.SetWriteDeadline(time.Now().Add(time.Second * time.Duration(config.Minosse.Connections.WriteTimeout))); err != nil {
-		logChannel.error("Error setting write deadline", err)
-		return
-	}
-
 	var gzb bytes.Buffer
-	var response Response
-	bufferedReader.Reset(conn)
-	req, err := http.ReadRequest(bufferedReader)
-	defer logChannel.logWholeRequest(req, &response, &start)
+	defer logChannel.logWholeRequest(ctx, &start)
 
-	if err != nil {
-		logChannel.error("Error reading request", err)
-		return
-	}
-
-	if req.Method != HTTP_GET_METHOD {
-		response = ResponseMethodNotAllowed()
-		_, err = conn.Write(response.ToByte())
-		if err != nil {
-			logChannel.error("Error writing response", err)
-		}
+	if !bytes.Equal(ctx.Method(), HTTP_GET_METHOD) {
+		// TODO: refactor
+		ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
+		ctx.SetBodyString(HTTP_NOT_ALLOWED)
+		ctx.Response.Header.Set(HEADER_CONTENT_TYPE, "text/plain; charset=utf-8")
 		return
 	}
 
 	gzipEnabled := false
-	if encoding := req.Header.Get("Accept-Encoding"); encoding != "" {
-		gzipEnabled = config.Minosse.Gzip.Enabled && strings.Contains(encoding, GZIP)
+	if ctx.Request.Header.HasAcceptEncoding(GZIP) {
+		gzipEnabled = config.Minosse.Gzip.Enabled
 	}
 
-	pathFile := config.Minosse.WebRoot + filepath.Clean(req.URL.String())
+	pathFile := config.Minosse.WebRoot + string(ctx.Path())
 	f, err := os.Open(pathFile)
 	if err != nil {
 		logChannel.error("File not found", err)
-		response = ResponseNotFound()
-		_, err = conn.Write(response.ToByte())
-		if err != nil {
-			logChannel.error("Error writing response", err)
-		}
+		// TODO: refactor
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+		ctx.SetBodyString(HTTP_NOT_FOUND_BODY)
+		ctx.Response.Header.Set(HEADER_CONTENT_TYPE, "text/plain; charset=utf-8")
 		return
 	}
 	stat, err := f.Stat()
 	if err != nil {
 		logChannel.error("Error during file stat", err)
-		response = ResponseInternalServerError()
-		_, err = conn.Write(response.ToByte())
-		if err != nil {
-			logChannel.error("Error writing response", err)
-		}
+		// TODO: refactor
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(HTTP_INTERNAL_SERVER_ERROR)
+		ctx.Response.Header.Set(HEADER_CONTENT_TYPE, "text/plain; charset=utf-8")
 		return
 	} else {
 		var encoding string
@@ -329,22 +305,25 @@ func handleConnection(conn net.Conn, req *http.Request, bufferedReader *bufio.Re
 			encoding = "identity"
 			contentLength = strconv.FormatInt(stat.Size(), 10)
 		}
-		response = ResponseOkNoBody(map[string]string{HEADER_CONTENT_TYPE: mime.TypeByExtension(path.Ext(pathFile)), HEADER_CONTENT_LENGTH: contentLength, HEADER_CONTENT_ENCODING: encoding, HEADER_CACHE_CONTROL: HEADER_CACHE_CONTROL_DEFAULT_VALUE, HEADER_CONNECTION: HEADER_CONNECTION_CLOSE, HEADER_LAST_MODIFIED: stat.ModTime().Format(http.TimeFormat), HEADER_DATE: time.Now().Format(http.TimeFormat), HEADER_SERVER: HEADER_SERVER_VALUE})
-	}
-
-	_, err = conn.Write(response.ResponseToByteNoBody())
-	if err != nil && err != io.EOF {
-		logChannel.error("Error writing response", err)
-		return
+		// TODO: refactor
+		ctx.SetStatusCode(fasthttp.StatusOK)
+		ctx.Response.Header.Set(HEADER_CONTENT_TYPE, mime.TypeByExtension(path.Ext(pathFile)))
+		ctx.Response.Header.Set(HEADER_CONTENT_LENGTH, contentLength)
+		ctx.Response.Header.Set(HEADER_CONTENT_ENCODING, encoding)
+		ctx.Response.Header.Set(HEADER_CACHE_CONTROL, HEADER_CACHE_CONTROL_DEFAULT_VALUE)
+		ctx.Response.Header.Set(HEADER_CONNECTION, HEADER_CONNECTION_CLOSE)
+		ctx.Response.Header.Set(HEADER_LAST_MODIFIED, stat.ModTime().Format(http.TimeFormat))
+		ctx.Response.Header.Set(HEADER_DATE, time.Now().Format(http.TimeFormat))
+		ctx.Response.Header.Set(HEADER_SERVER, HEADER_SERVER_VALUE)
 	}
 
 	if gzipEnabled {
-		if _, err := io.Copy(conn, &gzb); err != nil {
+		if _, err := io.Copy(ctx.Response.BodyWriter(), &gzb); err != nil {
 			logChannel.error("Error writing response", err)
 			return
 		}
 	} else {
-		if _, err := io.Copy(conn, f); err != nil {
+		if _, err := io.Copy(ctx.Response.BodyWriter(), f); err != nil {
 			logChannel.error("Error writing response", err)
 			return
 		}

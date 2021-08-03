@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 )
 
@@ -99,48 +97,23 @@ func (logChannel *LogChannel) error(message string, err error) {
 	}
 }
 
-func (logChannel *LogChannel) logWholeRequest(request *http.Request, response *Response, start *time.Time) {
-	if request == nil {
-		logChannel.channel <- Log{level: ERROR, message: "Nil request"}
-		return
-	}
-	if response == nil {
-		logChannel.channel <- Log{level: ERROR, message: "Nil response"}
-		return
-	}
-	if response.statusCode == 0 {
-		panic(response)
+func (logChannel *LogChannel) logWholeRequest(ctx *fasthttp.RequestCtx, start *time.Time) {
+	if ctx.Response.StatusCode() == 0 {
+		panic(ctx)
 	}
 
 	end := time.Now()
-	var sb strings.Builder
-	var body []byte
-
-	_, err := request.Body.Read(body)
-	if err != nil && err != io.EOF {
-		logChannel.error("Error while reading request body", err)
-	}
-
-	for key, val := range request.Header {
-		sb.WriteString(key)
-		sb.WriteString(": ")
-		for _, headerVal := range val {
-			sb.WriteString(headerVal)
-		}
-		sb.WriteString(", ")
-	}
 
 	logChannel.channel <- Log{
 		level:   INFO,
 		message: ">>>>",
 		data: []zap.Field{
-			zap.Int("response_code", response.statusCode),
-			zap.String("response_status", response.status),
-			zap.String("request_method", request.Method),
-			zap.String("request_uri", request.URL.String()),
-			zap.String("request_headers", sb.String()),
-			zap.String("request_body", string(body)),
-			zap.String("request_remote_address", request.RemoteAddr),
+			zap.Int("response_code", ctx.Response.StatusCode()),
+			// zap.String("request_method", request.URI()),
+			zap.String("request_uri", ctx.Request.URI().String()),
+			zap.ByteString("request_headers", ctx.Request.Header.RawHeaders()),
+			zap.ByteString("request_body", ctx.PostBody()),
+			zap.ByteString("request_remote_address", ctx.Request.Host()),
 			zap.Duration("duration", end.Sub(*start)),
 		},
 	}
