@@ -25,6 +25,7 @@ import (
 	"github.com/pelletier/go-toml"
 	"go.uber.org/ratelimit"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const SocketReadTimeout = 30
@@ -48,7 +49,7 @@ func main() {
 		return
 	}
 	logChannel.channel <- Log{
-		level:   DEBUG,
+		level:   INFO,
 		message: "Minosse server started",
 		data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.Port), zap.String("root", config.Minosse.WebRoot)},
 	}
@@ -82,7 +83,7 @@ func main() {
 			return
 		}
 		logChannel.channel <- Log{
-			level:   DEBUG,
+			level:   INFO,
 			message: "Serving with TLS enabled on: ",
 			data:    []zap.Field{zap.String("address", config.Minosse.Server), zap.Int("port", config.Minosse.TLS.Port)},
 		}
@@ -160,11 +161,11 @@ func applyDefaultConfigValues(conf *Config) {
 	// Connection timeout
 	if conf.Minosse.Connections.ReadTimeout == 0 {
 		logChannel.channel <- Log{level: INFO, message: "Using default connection read timeout of 30 seconds"}
-		conf.Minosse.Connections.ReadTimeout = 30
+		conf.Minosse.Connections.ReadTimeout = SocketReadTimeout
 	}
 	if conf.Minosse.Connections.WriteTimeout == 0 {
 		logChannel.channel <- Log{level: INFO, message: "Using default connection write timeout of 30 seconds"}
-		conf.Minosse.Connections.WriteTimeout = 30
+		conf.Minosse.Connections.WriteTimeout = SocketWriteTimeout
 	}
 	// Gzip
 	if conf.Minosse.Gzip.Enabled {
@@ -190,21 +191,23 @@ func applyDefaultConfigValues(conf *Config) {
 
 func configureLogger() {
 	var logger *zap.Logger
+	var conf zap.Config
+
 	switch config.Zap.Mode {
 	case "development":
-		var err error
-		logger, err = zap.NewDevelopment()
-		if err != nil {
-			log.Fatalf("Could not instantiate zap logger. %v", err)
-		}
+		conf = zap.NewDevelopmentConfig()
+
 	case "production":
-		var err error
-		logger, err = zap.NewProduction()
-		if err != nil {
-			log.Fatalf("Could not instantiate zap logger. %v", err)
-		}
+		conf = zap.NewProductionConfig()
+
 	default:
 		log.Fatalf("Zap logger mode %s is invalid. Possible values are: development | production", config.Zap.Mode)
+	}
+
+	conf.Level.SetLevel(zapcore.Level(config.Minosse.Log - 1))
+	logger, err := conf.Build()
+	if err != nil {
+		log.Fatalf("Could not instantiate zap logger. %v", err)
 	}
 	logChannel = newLogChannel(logger, &config)
 

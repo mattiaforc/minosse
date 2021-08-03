@@ -30,16 +30,20 @@ type LogLevel int8
 
 const (
 	DISABLED LogLevel = 100
-	// INFO lowest LogLevel
-	INFO LogLevel = 0
-	// DEBUG LogLevel 1
-	DEBUG LogLevel = 1
+	// DEBUG lowest LogLevel
+	DEBUG LogLevel = iota
+	// INFO LogLevel 1
+	INFO
 	// WARNING LogLevel 2
-	WARNING LogLevel = 2
+	WARNING
 	// ERROR LogLevel 3
-	ERROR LogLevel = 3
-	// FATAL LogLevel 4
-	FATAL LogLevel = 4
+	ERROR
+	// DPANIC LogLevel 4
+	DPANIC
+	// PANIC LogLevel 5
+	PANIC
+	// FATAL LogLevel 6
+	FATAL
 )
 
 func newLogChannel(logger *zap.Logger, config *Config) LogChannel {
@@ -56,27 +60,25 @@ func (logChannel LogChannel) handleLog() {
 	for {
 		log := <-logChannel.channel
 
-		if log.level >= logChannel.level {
-			switch log.level {
-			case INFO:
-				logChannel.logger.Info(log.message, log.data...)
-			case DEBUG:
-				logChannel.logger.Debug(log.message, log.data...)
-			case WARNING:
-				color.Set(color.FgYellow)
-				logChannel.logger.Warn(log.message, log.data...)
-				color.Unset()
-			case ERROR:
-				color.Set(color.FgRed)
-				logChannel.logger.Error(log.message, log.data...)
-				color.Unset()
-			case FATAL:
-				color.Set(color.FgHiRed)
-				logChannel.logger.Fatal(log.message, log.data...)
-				color.Unset()
-			default:
-				logChannel.logger.Error(fmt.Sprintf("MINOSSE: LOG LEVEL %d UNDEFINED", log.level))
-			}
+		switch log.level {
+		case DEBUG:
+			logChannel.logger.Debug(log.message, log.data...)
+		case INFO:
+			logChannel.logger.Info(log.message, log.data...)
+		case WARNING:
+			color.Set(color.FgYellow)
+			logChannel.logger.Warn(log.message, log.data...)
+			color.Unset()
+		case ERROR:
+			color.Set(color.FgRed)
+			logChannel.logger.Error(log.message, log.data...)
+			color.Unset()
+		case FATAL:
+			color.Set(color.FgHiRed)
+			logChannel.logger.Fatal(log.message, log.data...)
+			color.Unset()
+		default:
+			logChannel.logger.Error(fmt.Sprintf("MINOSSE: LOG LEVEL %d UNDEFINED", log.level))
 		}
 	}
 }
