@@ -8,21 +8,22 @@ type Config struct {
 
 // Minosse Main minosse configuration structure
 type Minosse struct {
-	Server      string
-	Port        int
-	WebRoot     string
-	Log         LogLevel
-	Connections Connections
-	TLS         TLS
-	Gzip		GZip
+	Server           string
+	Port             int
+	WebRoot          string
+	Log              LogLevel
+	Connections      Connections
+	TLS              TLS
+	Gzip             GZip
 	MaxProcessNumber int
 }
+
 // GZip configurations
 type GZip struct {
-	Enabled bool
-	Level int
+	Enabled   bool
+	Level     int
 	Threshold int64
-	Exclude string
+	Exclude   string
 }
 
 // Connections Configurations regarding connections

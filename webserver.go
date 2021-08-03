@@ -210,6 +210,12 @@ func configureLogger() {
 
 	if logChannel.level != DISABLED {
 		go logChannel.handleLog()
+	} else {
+		go func(channel LogChannel) {
+			for {
+				<-channel.channel
+			}
+		}(logChannel)
 	}
 }
 
