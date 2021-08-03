@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-reuseport"
 	"github.com/pelletier/go-toml"
 	"go.uber.org/ratelimit"
 	"go.uber.org/zap"
@@ -36,14 +37,14 @@ var logChannel LogChannel
 var excludePattern *regexp.Regexp
 
 func main() {
-
 	PrintMinosse()
 	configure(&config)
 	configureLogger()
 	applyDefaultConfigValues(&config)
 
 	newConnections := make(chan net.Conn)
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.Port))
+	// listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.Port))
+	listener, err := reuseport.Listen("tcp", fmt.Sprintf("%s:%d", config.Minosse.Server, config.Minosse.Port))
 	if err != nil {
 		logChannel.fatalError("Error when trying to listen at specified address:port", err)
 		return
