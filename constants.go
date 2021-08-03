@@ -1,7 +1,9 @@
 package main
 
 const HTTP_POST_METHOD string = "POST"
-const HTTP_GET_METHOD string = "GET"
+
+var HTTP_GET_METHOD = []byte{'G', 'E', 'T'}
+
 const HTTP_NOT_FOUND string = "Not Found"
 const HTTP_NOT_ALLOWED string = "Method Not Allowed"
 const HTTP_OK string = "Ok"
