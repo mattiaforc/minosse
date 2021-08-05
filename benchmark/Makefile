@@ -4,7 +4,7 @@ compile:
 	./compile_alpine.sh ..
 
 build: compile
-	docker build -f Dockerfile ../
+	docker build -f Dockerfile ../ -t minosse
 
 run: compile build
 	docker container rm minosse-bench || true

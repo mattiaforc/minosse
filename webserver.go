@@ -123,7 +123,7 @@ func configure(conf *Config) {
 func applyDefaultConfigValues(conf *Config) {
 	// Server
 	if conf.Minosse.Server == "" {
-		conf.Minosse.Server = "localhost"
+		conf.Minosse.Server = "0.0.0.0"
 		logChannel.channel <- Log{level: INFO, message: "Using localhost as server url"}
 	}
 	// Server port
